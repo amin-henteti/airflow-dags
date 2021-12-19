@@ -1,0 +1,12 @@
+system='Linux', node='85cd7ab7018e', release='4.19.76-linuxkit', version='#1 SMP Tue May 26 11:42:35 UTC 2020', machine='x86_64', processor=''
+{
+        "system": {
+                "id": 1,
+                "name": "Mr.X"
+        }, 
+        "node": "85cd7ab7018e",
+        "release": "4.19.76-linuxkit",
+        "version": "#1 SMP Tue May 26 11:42:35 UTC 2020",
+        "machine": "x86_64",
+        "processor": ""
+}

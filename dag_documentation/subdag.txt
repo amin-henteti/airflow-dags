@@ -1,0 +1,50 @@
+SubDAGs
+   They are used to :
+      1) replace regular set of tasks to every DAG, 
+      2) group and combine a lot of tasks into a single SubDAG, logical unit. 
+   SubDAG operators should contain a factory method that returns a DAG object. 
+   This will prevent the SubDAG from being treated like a separate DAG in the main UI
+   SubDAG's dag_id should be prefixed by the name of its parent DAG and a dot (parent.child)
+   You should share arguments between main DAG and SubDAG by passing arguments to the SubDAG operator
+   Marking success on a SubDagOperator does not affect the state of the tasks within it.
+
+   Example
+      from datetime import datetime
+
+      from airflow import DAG
+      from airflow.operators.dummy import DummyOperator
+
+
+      def subdag(parent_dag_name, child_dag_name, args):
+         """
+         Generate a DAG to be used as a subdag.
+
+         :param str parent_dag_name: Id of the parent DAG
+         :param str child_dag_name: Id of the child DAG
+         :param dict args: Default arguments to provide to the subdag
+         :return: DAG to use as a subdag
+         :rtype: airflow.models.DAG
+         """
+         dag_subdag = DAG(
+            dag_id=f'{parent_dag_name}.{child_dag_name}',
+            default_args=args,
+            start_date=datetime(2021, 1, 1),
+            catchup=False,
+            schedule_interval="@daily",
+         )
+
+         for i in range(5):
+            DummyOperator(
+               task_id=f'{child_dag_name}-task-{i + 1}',
+               default_args=args,
+               dag=dag_subdag,
+            )
+
+         return dag_subdag
+
+      with dag:
+         section_1 = SubDagOperator(
+            task_id='section-1',
+            subdag=subdag(DAG_NAME, 'section-1', default_args),
+         )
+

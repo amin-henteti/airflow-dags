@@ -1,0 +1,159 @@
+Testing Dag
+   Airflow users should treat DAGs as production level code, 
+   and DAGs should have various associated tests to ensure that they produce expected results. 
+
+DAG Loader Test
+   Ensure that your DAG does not contain a piece of code that raises error while loading. 
+   No additional code needs to be written by the user to run this test:
+      command : python your-dag-file.py
+   if the command runned without errors then your DAG does not contain 
+   any uninstalled dependency, syntax errors, etc.
+   This is also a great way to check if your DAG loads faster after an optimization, 
+   if you want to optimize DAG loading time. Simply run the DAG and measure the time it takes, 
+   And make sure your DAG runs with the same dependencies, environment variables, common code.
+      command : time python airflow/example_dags/example_python_operator.py
+   Note that when loading the file this way, you are starting a new interpreter 
+   so there is an initial loading time that is not present when Airflow parses the DAG. 
+   You can assess the time of initialization by running:
+      time python -c ''
+   
+Unit tests
+   Unit tests ensure that there is no incorrect code in your DAG. 
+   You can write unit tests for both your tasks and your DAG.
+   Example
+      # Unit test for loading a DAG:
+      import pytest
+      from airflow.models import DagBag
+
+      @pytest.fixture()
+      def dagbag(self):
+         return DagBag()
+
+
+      def test_dag_loaded(self, dagbag):
+         dag = dagbag.get_dag(dag_id="hello_world")
+         assert dagbag.import_errors == {}
+         assert dag is not None
+         assert len(dag.tasks) == 1
+
+      Example
+         # Unit test a DAG structure: 
+         # to verify the structure of a code-generated DAG against a dict object
+
+         def assert_dag_dict_equal(source, dag):
+            assert dag.task_dict.keys() == source.keys()
+            for task_id, downstream_list in source.items():
+               assert dag.has_task(task_id)
+               task = dag.get_task(task_id)
+               assert task.downstream_task_ids == set(downstream_list)
+
+
+         def test_dag():
+            assert_dag_dict_equal(
+               {
+                  "DummyInstruction_0": ["DummyInstruction_1"],
+                  "DummyInstruction_1": ["DummyInstruction_2"],
+                  "DummyInstruction_2": ["DummyInstruction_3"],
+                  "DummyInstruction_3": [],
+               },
+                  dag,
+            )
+      # Unit test for custom operator:
+      import datetime
+      import pytest
+
+      from airflow.utils.state import DagRunState
+      from airflow.utils.types import DagRunType
+
+      DATA_INTERVAL_START = datetime.datetime(2021, 9, 13)
+      DATA_INTERVAL_END = DATA_INTERVAL_START + datetime.timedelta(days=1)
+
+      TEST_DAG_ID = "my_custom_operator_dag"
+      TEST_TASK_ID = "my_custom_operator_task"
+
+
+      @pytest.fixture()
+      def dag():
+         with DAG(
+            dag_id=TEST_DAG_ID,
+            schedule_interval="@daily",
+            default_args={"start_date": DATA_INTERVAL_START},
+         ) as dag:
+            MyCustomOperator(
+               task_id=TEST_TASK_ID,
+               prefix="s3://bucket/some/prefix",
+            )
+            return dag
+
+
+      def test_my_custom_operator_execute_no_trigger(dag):
+         dagrun = dag.create_dagrun(
+            state=DagRunState.RUNNING,
+            execution_date=DATA_INTERVAL_START,
+            data_interval=(DATA_INTERVAL_START, DATA_INTERVAL_END),
+            start_date=DATA_INTERVAL_END,
+            run_type=DagRunType.MANUAL,
+         )
+         ti = dagrun.get_task_instance(task_id=TEST_TASK_ID)
+         ti.task = dag.get_task(task_id=TEST_TASK_ID)
+         ti.run(ignore_ti_state=True)
+         assert ti.state == State.SUCCESS # Assert something related to tasks results.
+      
+Self-Checks
+   You can also implement checks in a DAG to make sure the tasks are producing the results
+   as expected. As an example, if you have a task that pushes data to S3, 
+   you can implement a check in the next task. 
+   For example, the check could make sure that the partition is created in S3 
+   and perform some simple checks to determine if the data is correct.
+
+   Similarly, if you have a task that starts a microservice in Kubernetes or Mesos, 
+   you should check if the service has started or not using airflow.providers.http.sensors.http.HttpSensor.
+   Example 
+      task = PushToS3(...)
+      check = S3KeySensor(
+         task_id="check_parquet_exists",
+         bucket_key="s3://bucket/key/foo.parquet",
+         poke_interval=0,
+         timeout=0,
+      )
+      task >> check      
+     
+Staging environment
+   If possible, keep a staging environment to test the complete DAG run before deploying
+   in the production. Make sure your DAG is parameterized to change the variables, 
+   e.g., the output path of S3 operation or the database used to read the configuration. 
+   Do not hard code values inside the DAG and then change them manually 
+   according to the environment.
+
+   You can use environment variables to parameterize the DAG.
+   Example 
+      import os
+
+      dest = os.environ.get("MY_DAG_DEST_PATH", "s3://default-target/path/")
+      
+Mocking variables and connections
+   When you write tests for code that uses variables or a connection, 
+   you must ensure that they exist when you run the tests. 
+   The obvious solution is to save these objects to the database 
+   so they can be read while your code is executing. 
+   However, reading & writing objects to database are burdened with additional time overhead. 
+   In order to speed up the test execution, it is worth simulating 
+   the existence of these objects without saving them to the database. 
+   For this, you can create environment variables with 
+   mocking os.environ using unittest.mock.patch.dict().
+   Example
+      # For variable, use AIRFLOW_VAR_{KEY}.
+      with mock.patch.dict("os.environ", AIRFLOW_VAR_KEY="env-value"):
+       assert "env-value" == Variable.get("key")
+       
+      # For connection, use AIRFLOW_CONN_{CONN_ID}.
+
+      conn = Connection(
+         conn_type="gcpssh",
+         login="cat",
+         host="conn-host",
+      )
+      conn_uri = conn.get_uri()
+      with mock.patch.dict("os.environ", AIRFLOW_CONN_MY_CONN=conn_uri):
+         assert "cat" == Connection.get("my_conn").login
+         

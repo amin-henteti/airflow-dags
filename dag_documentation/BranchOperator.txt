@@ -1,0 +1,58 @@
+BranchDateTimeOperator
+   Use the BranchDateTimeOperator to branch into one of two execution paths 
+   depending on whether the date and/or time of execution falls into the range 
+   given by two target arguments.
+   When a [[datetime.time]] object is used, it will be combined with the current date 
+   in order to allow comparisons with it. 
+   If that target_upper is set to a datetime.time that occurs before the given target_lower, 
+   a day will be added to target_upper. This is done to allow for time periods that span over two dates.
+   
+   Example
+      task_1 = DummyOperator(task_id='date_in_range', dag=dag)
+      task_2 = DummyOperator(task_id='date_outside_range', dag=dag)
+
+      cond1 = BranchDateTimeOperator(
+          task_id='datetime_branch',
+          follow_task_ids_if_true=['date_in_range'],
+          follow_task_ids_if_false=['date_outside_range'],
+          target_upper=datetime(2020, 10, 10, 15, 0, 0),
+          target_lower=datetime(2020, 10, 10, 14, 0, 0),
+          dag=dag,
+      )
+      ,
+      task_1 = DummyOperator(task_id='date_in_range', dag=dag)
+      task_2 = DummyOperator(task_id='date_outside_range', dag=dag)
+
+      cond2 = BranchDateTimeOperator(
+          task_id='datetime_branch',
+          follow_task_ids_if_true=['date_in_range'],
+          follow_task_ids_if_false=['date_outside_range'],
+          target_upper=datetime.time(0, 0, 0),
+          target_lower=datetime.time(15, 0, 0),
+          dag=dag,
+      )
+      # Since target_lower happens after target_upper, target_upper will be moved to the following day
+      # Run task_1 if cond2 executes between 15:00:00, and 00:00:00 of the following day
+      cond2 >> [task_1, task_2]
+
+
+      # Run task_1 if cond1 executes between 2020-10-10 14:00:00 and 2020-10-10 15:00:00
+      cond1 >> [task_1, task_2]
+      
+BranchDayOfWeekOperator
+   Use the BranchDayOfWeekOperator to branch your workflow based on week day value.   
+   Example
+      task_1 = DummyOperator(task_id='branch_true', dag=dag)
+      task_2 = DummyOperator(task_id='branch_false', dag=dag)
+
+      branch = BranchDayOfWeekOperator(
+          task_id="make_choice",
+          follow_task_ids_if_true="branch_true",
+          follow_task_ids_if_false="branch_false",
+          week_day="Monday",
+      )
+
+      # Run task_1 if branch executes on Monday
+      branch >> [task_1, task_2]
+      
+      

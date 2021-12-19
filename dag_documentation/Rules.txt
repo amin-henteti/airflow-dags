@@ -1,0 +1,134 @@
+Rules 
+   Dynamic variable
+   op_args and op_kwargs in PythonOp are templatable so we can pass jinja template
+   Make sure to use not only {{ }} but also "" so that the expression will be evaluated
+   with this templating we have access to 
+      1) dag_run.config['x']
+      2) task and dag attributes like owner, start_date ...
+      3) macros (variables, function and modules related to time, random principally)
+      4) user_defined_macros (must be specified in the dag declaration)
+      5) params this is actually an attribute specified in the dag declaration 
+         it gets a dicionary and its values can be accessed like the others 
+         one bonus is that this initialize the dictionary when gets called manually in UI
+         So this can be used to replace dag_run in fact in this case dag_run will be redundant but still works
+         Params if initialized dont raize error when trigger without a json config
+   Pay attention that *args in the python callable will unpack the passed op_args
+   So the string e.g., 'airflow'="{{ task.owner }} will be viwed as ('a', 'i', 'r', 'f', 'l', 'o', 'w')
+   to get around this we can use    
+   
+   params make use of json-schema to define the properties and doing the validation,
+   This is used with the Params class imported from airflow.models.param
+   Example
+      with DAG(
+         'my_dag',
+         params: {
+            'int_param': Param(10, type='integer', minimum=0, maximum=20), # a int param with default value
+            'str_param': Param(type='string', minLength=2, maxLength=4), # a mandatory str param
+            'dummy_param': Param(type=['null', 'number', 'string']) # a param which can be None as well
+            'old_param': 'old_way_of_passing',  # i.e. no data or type validations
+            'simple_param': Param('im_just_like_old_param'), # i.e. no data or type validations
+            'email_param': Param(
+               default='example@example.com',
+               type='string',
+               format='idn-email',
+               minLength=5,
+               maxLength=255,
+            ),
+         }
+      )
+
+   
+   Other concept is Variable that can be used after import from airflow.models import Variable
+   number_of_dags = Variable.get(‘dag_number’, default_var=3)
+   
+   Also from connection after from airflow.models.connections import Connection
+   session = settings.Session()
+   conns = (session.query(Connection.conn_id). # conn_id is an attribute of all connections
+            filter(Connection.conn_id.ilike(‘%MY_DATABASE_CONN%’))
+            .all())
+   Notice that, like before, we access the Models library to bring in the Connection class
+   (as we did previously with the Variable class). 
+   We are also accessing the Session() class from airflow.settings, which will allow us to
+   query the current database session.
+   
+Xcom
+   syntax to send variable to other tasks is to use 
+   ti = kwargs['ti']
+   ti.xcom_push('input_len', input_len)
+   ti.xcom_pull('input_len', task_ids='process') # task_ids can be optional
+   
+Dynamically generating dags
+   1) wrapper function
+   2) write a Python script to create the DAG files based on the template and config files. The script loops through every config file in the
+   So make copy of template in the dags/ folder and overwrites the parameters in that file (including the parameters from the config file).
+   
+Scalability
+   If the DAG parsing time (i.e., the time to parse all code in the DAG_FOLDER) 
+   is greater than the Scheduler heartbeat interval, the scheduler can get LOCKED up, 
+   and tasks won’t get executed. 
+   If you are dynamically generating DAGs and tasks aren’t running, 
+   this is a good metric to review in the beginning of troubleshooting.
+   
+   
+Param validation
+   if there are any required params without default values
+   airflow.exceptions.AirflowException: DAG Schedule must be None, 
+   
+   upper bounds are included
+
+Connection fetch
+   Neither 'InstrumentedAttribute' object nor 'Comparator' object associated with Connection.conn_id has an attribute 'filter'
+   dont use    ses.query(Connection.conn_id).filter('aws_default').all()
+   instead use ses.query(Connection.conn_id).filter(Connection.conn_id.ilike('aws_default')).all()
+   
+dag_run.config
+   if trigged without specifying config json
+   this will raise an error enven if we have params attribute in the dag definition
+
+Execution time  
+   It’s intuitive to think that if you tell your DAG to start “now” that it’ll execute immediately. But that’s not how Airflow reads datetime.now().
+   For a DAG to be executed, the "start_date" must be a time in the past. 
+   Otherwise Airflow will assume that it’s not yet ready to execute. 
+   When Airflow evaluates your DAG file, it interprets datetime.now() 
+   as the current timestamp i.e NOT a time in the past & decides that it’s not ready to run.
+   
+   To properly trigger your DAG to run, make sure to insert a fixed time in the past 
+   and set catchup=False if you don’t want to perform a backfill.
+   
+Avoid making requests outside of an Operator.
+   If you’re making API calls, JSON requests, or database requests 
+   outside of an Airflow Operator at a high frequency, 
+   your Webserver is much more likely to timeout. 
+
+Increase the Webserver Timeout period.
+   If upping the Webserver resources doesn’t seem to have an effect, 
+   try increasing web_server_master_timeout or web_server_worker_timeout.
+   Raising those values will tell your Airflow Webserver to wait a bit longer to load
+   before it hits you with a 503 (a timeout). 
+   You might still experience slow loading times if your Deployment is in fact, underpowered, but you’ll likely avoid hitting a 503.
+   
+If your tasks are stuck in a bottleneck, we’d recommend taking a closer look at:
+   - Environment variables and concurrency configurations
+   - Worker and Scheduler resources
+   - ++AIRFLOW__CORE__PARALLELISM, which determines how many task instances 
+   can be actively running in parallel across DAGs given the resources available 
+   at any given time at the Deployment level. Think of this as “maximum active tasks anywhere.”
+   
+   Defined as ENV AIRFLOW__CORE__DAG_CONCURRENCY=, dag_concurrency
+   determines how many task instances your Scheduler can schedule at once per DAG. 
+   Think of this as “maximum tasks that can be scheduled at once, per DAG.” by default=16.  
+   
+   If you consider setting DAG or deployment-level concurrency configurations 
+   to a low number to protect against API rate limits, 
+   we’d recommend using “pools” instead; they’ll allow you to limit parallelism @task level
+   and won’t limit scheduling or execution outside of the tasks that need it.
+   Max Active Runs per DAG
+
+   Defined as AIRFLOW__CORE__MAX_ACTIVE_RUNS=, maxactiverunsperdag determines
+   the maximum number of active DAG runs per DAG. The default value is 16.
+
+   Defined as AIRFLOW__CELERY__WORKER_CONCURRENCY=9, worker_concurrency
+   determines how many tasks each Celery Worker can run at any given time.
+   The Celery Executor will run a max of 16 tasks concurrently by default.
+   Think of this as “how many tasks each of my workers can take on at any given time.”
+   

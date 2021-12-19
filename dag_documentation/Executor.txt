@@ -1,0 +1,52 @@
+Executor
+   Executors are the mechanism by which task instances get run. 
+   They have a common API and are “pluggable”, so you can swap executors based on your installation needs.
+
+   Airflow can only have one executor configured at a time; 
+   this is set by the executor option in the [core] section of the configuration file.
+
+Executor Types
+   There are two types of executor-those that run tasks locally (inside the scheduler process),
+   and those that run their tasks remotely (usually via a pool of workers). 
+   Airflow comes configured with the SequentialExecutor by default, which is a local executor,
+   and the safest option for execution, 
+   but we strongly recommend you change this to LocalExecutor for small, single-machine installations, 
+   or one of the remote executors for a multi-machine/cloud installation.
+   Example 
+      Local Executors
+         1) Debug Executor:meant as a debug tool and can be used from IDE. 
+         It is a single process executor that queues TaskInstance and executes them by 
+         running _run_raw_task method.
+         
+         2) Local Executor:runs tasks by spawning processes in controlled fashion in =! modes.
+         Given that BaseExecutor has the option to receive a parallelism parameter to limit
+         the number of process spawned, when this parameter is 0 the number of processes 
+         that LocalExecutor can spawn is unlimited.
+
+         
+         3) Sequential Executor : the default executor when you first install airflow. 
+         It's the only executor that can be used with sqlite (doesn’t support multiple connections)
+         This executor will only run one task instance at a time. 
+         For production use case, please use other executors.
+         
+      Remote Executors
+         1) Celery Executor: is one of the ways you can scale out the number of workers. 
+         For this to work, you need to setup a Celery backend (RabbitMQ, Redis, …) 
+         and change your airflow.cfg to point the executor parameter to CeleryExecutor 
+         and provide the related Celery settings.
+         
+         2) KubernetesExecutor: KubernetesExecutor runs as a process in the Airflow Scheduler.
+         The scheduler itself does not necessarily need to be running on Kubernetes, 
+         but does need access to a Kubernetes cluster.
+         KubernetesExecutor requires a non-sqlite database in the backend.
+         When a DAG submits a task, the KubernetesExecutor requests a worker pod from 
+         the Kubernetes API. The worker pod then runs the task, reports result, terminates.
+
+         3) CeleryKubernetes Executor: allows users to run simultaneously a Celery & Kubernetes Executors. 
+         An executor is chosen to run task based on the task’s queue.
+         
+         4) Dask Executor: allows you to run Airflow tasks in a Dask Distributed cluster.
+         Dask clusters can be run on a single machine or on remote networks.
+         To do this Edit set your executor to airflow.executors.dask_executor.DaskExecutor 
+         and provide the Dask Scheduler address in the [dask] section in airflow.cfg.
+         

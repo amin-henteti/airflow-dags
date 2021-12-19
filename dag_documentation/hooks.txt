@@ -1,0 +1,38 @@
+﻿Hooks
+   A Hook is a high-level interface to an external platform that lets you quickly and easily 
+   talk to them without having to write low-level code that hits their API 
+   or uses special libraries. So they are are interfaces to external platforms and databases
+   You can view a full list of airflow hooks in https://airflow.apache.org/docs/apache-airflow/stable/_api/airflow/hooks/index.html
+   Example
+      # Hook for running processes with the subprocess module
+      airflow.hooks.subprocess.SubprocessHook
+   They’re also often the building blocks that Operators are built out of.
+   They integrate with Connections to gather credentials, and many have a default conn_id;
+   Example
+      PostgresHook automatically looks for the Connection with a conn_id of postgres_default 
+      if you don’t pass one in.
+   MySqlHook, HiveHook, PigHook return object that can handle the connection and interaction
+   to specific instances of these systems, expose consistent methods to interact with them.
+   CustomOperator using Hook
+   Instead of creating a connection per task, you can retrieve a connection from the hook
+   and utilize it. So, Hook also helps to avoid storing connection auth parameters in a DAG
+   When the operator invokes the query on the hook object, a new connection gets created if it doesn’t exist. 
+   The hook retrieves the auth parameters such as username and password from Airflow backend 
+   and passes the params to the airflow.hooks.base.BaseHook.get_connection(). 
+   You should create hook only in the execute method or any method which is called from execute.
+   Example
+      class HelloDBOperator(BaseOperator):
+         def __init__(self, name: str, mysql_conn_id: str, database: str, **kwargs) -> None:
+            super().__init__(**kwargs)
+            self.name = name
+            self.mysql_conn_id = mysql_conn_id
+            self.database = database
+
+         def execute(self, context):
+            hook = MySqlHook(mysql_conn_id=self.mysql_conn_id, schema=self.database)
+            sql = "select name from user"
+            result = hook.get_first(sql) # Executes the sql and return the first result row.
+            message = f"Hello {result['name']}"
+            print(message)
+            return message
+   

@@ -1,0 +1,46 @@
+Control Flow
+   By default, a DAG will only run a Task when all the Tasks it depends on are successful. 
+   There are several ways of modifying this, however:
+      1) Branching, where you can select which Task to move onto based on a condition
+      2) Latest Only, special form of branching that only runs on DAGs running against present
+      3) Depends On Past, where tasks can depend on themselves from a previous run
+      4) Trigger Rules, which let you set the conditions under which a DAG will run a task.
+
+Branching
+   BranchPythonOperator is much like the PythonOperator except that
+   it expects a python_callable that returns task_id (or list) has to be directly downstream  of task_ids). 
+   Can define branch in a class tha inherit BaseBranchOperator, 
+   but expects you to ovirride the method choose_branch 
+   Example 
+      class MyBranchOperator(BaseBranchOperator):
+         def choose_branch(self, context):
+            pass
+    
+   The task_id returned is followed, and all of the other paths are skipped if not also downstream the returned task_id .
+   BranchPythonOperator can also be used with XComs allowing branching context 
+   to dynamically decide what branch to follow based on upstream tasks. 
+   Example
+      def branch_func(ti):
+         xcom_value = int(ti.xcom_pull(task_ids="start_task", key="*"))
+         if xcom_value >= 5:
+            return "continue_task"
+         else:
+            return "stop_task"
+      start_op = BashOperator(
+         task_id="start_task",
+         bash_command="echo 5",
+         xcom_push=True,
+         dag=dag,
+         )
+
+      branch_op = BranchPythonOperator(
+         task_id="branch_task",
+         python_callable=branch_func,
+         dag=dag,
+         )
+
+      continue_op = DummyOperator(task_id="continue_task", dag=dag)
+      stop_op = DummyOperator(task_id="stop_task", dag=dag)
+
+      start_op >> branch_op >> [continue_op, stop_op]
+         

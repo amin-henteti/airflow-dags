@@ -1,0 +1,80 @@
+
+# create a databasee
+
+create table "Employees_temp"
+(
+    "Serial Number" numeric not null
+ constraint employees_pk primary key,
+    	"Company Name" text,
+    	"Employee Markme" text,
+    	"Description" text,
+    	"Leave" integer
+);
+
+# make a task to get data from a csv file from the internet
+
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+@task()
+def get_data():
+    url = "https://raw.githubusercontent.com/apache/airflow/main/docs/apache-airflow/pipeline_example.csv"
+    response = requests.request("GET", url)
+
+    with open("employees.csv", "w") as file:
+        for row in response.text.split("\n"):
+            file.write(row)
+
+    postgres_hook = PostgresHook(postgres_conn_id="LOCAL")
+    conn = postgres_hook.get_conn()
+    cur = conn.cursor()
+    with open("employees.csv", "r") as file:
+        cur.copy_from(
+            f,
+            "Employees_temp",
+            columns=[
+                "Serial Number",
+                "Company Name",
+                "Employee Markme",
+                "Description",
+                "Leave",
+            ],
+            sep=",",
+        )
+    conn.commit()
+    return 0
+
+# merge data with previous database
+@task
+def merge_data():
+    query = """
+        delete from "Employees_temp" et using "Employees" e
+        where e."Serial Number" = et."Serial Number";
+
+        insert into "Employees" (select * from "Employees_temp");
+    """
+    try:
+        postgres_hook = PostgresHook(postgres_conn_id="LOCAL")
+        conn = postgres_hook.get_conn()
+        cur = conn.cursor()
+        cur.execute(query)
+        conn.commit()
+        return 0
+    except Exception as e:
+        return 1
+
+@dag(start_date=datetime.today()-timedelta(days=2), schedule_interval="@daily")
+def etl():
+   """\
+   this is a dag documentation with a special `dag` declaration 
+   we can insert image inside the documentation using
+   ![img](http://montcs.bloomu.edu/~bobmon/Semesters/2012-01/491/import%20soul.png)
+   """
+   @task
+   def extract_data():
+	pass
+   @task
+   def merge_data():
+     	pass
+   get_data() >> merge_data()
+
+etl_dag = etl() # etl pattern stands for extract, tansform, load 
+

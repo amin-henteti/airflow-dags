@@ -1,0 +1,33 @@
+Access Control
+   Airflow ships with a set of roles by default: Admin, Op, User, Viewer, and Public.
+   Only Admin users could configure/alter the permissions for other roles.
+   
+   Custom Roles - DAG Level Role
+   Admin can create a set of roles which are only allowed to view a certain set of dags.
+   Each dag defined in the dag model table is treated as a View which has two permissions
+   associated with it (can_read and can_edit). 
+   There is a special view called DAGs (was called all_dags) 
+   which allows the role to access all the dags. 
+   The default Admin, Op, user, Viwer roles can all access DAGs view
+   
+   You can creat romes in th UI or through CLI command: airflow roles create Role1 Role2
+   We could assign the given role to a new user using CLI command: airflow users add-role 
+
+Permissions
+   Resource-Based permissions
+   permissions are based on individual resources and small subset of actions on those resources. 
+   Resources match standard Airflow concepts like (Dag, DagRun, Task, and Connection).
+   Actions include (can_create, can_read, can_edit, and can_delete).
+   Permissions (each consistent of a resource + action pair) are then added to roles.
+
+   To access an endpoint, the user needs all permissions assigned to that endpoint
+   There are five default roles: Admin, Op, User, Viewer, Public. 
+   Each one has the permissions of the following role, as well as additional permissions.
+
+   DAG-level permissions
+   For DAG-level permissions exclusively, access can be controlled at the level of all DAGs or individual DAG objects. This includes DAGs.can_create, DAGs.can_read, DAGs.can_edit, and DAGs.can_delete. When these permissions are listed, access is granted to users who either have the listed permission or the same permission for the specific DAG being acted upon. For individual DAGs, the resource name is DAG: + the DAG ID.
+
+For example, if a user is trying to view DAG information for the example_dag_id, and the endpoint requires DAGs.can_read access, access will be granted if the user has either DAGs.can_read or DAG:example_dag_id.can_read access.
+
+
+

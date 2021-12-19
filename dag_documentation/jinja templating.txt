@@ -1,0 +1,153 @@
+Templeting In Jinja 
+   Templating in Airflow like templating with Jinja in Python:
+   define your to-be-evaluated code between double curly braces, 
+   and the expression will be evaluated at runtime
+   
+   how to apply Jinja templates in your code, i.e., :
+      Which variables and functions are available when templating
+      Which operator fields can be templated and which cannot
+      How to validate templates
+      How to apply custom variables and functions when templating
+      How to render templates to strings and native Python code
+
+   Templates cannot be applied to all arguments of an operator. 
+   Two attributes in the BaseOperator define limitations on templating:
+      template_fields: Defines which fields are templateable
+      template_ext: Defines which file extensions are templateable
+   Example
+      # BashOperator
+      class BashOperator(BaseOperator):
+         template_fields = ('bash_command', 'env')  # defines which fields are templateable
+         template_ext = ('.sh', '.bash')  # defines which file extensions are templateable
+
+      def __init__(
+         self,
+         *,
+         bash_command,
+         env: None,
+         output_encoding: 'utf-8',
+         **kwargs,
+      ):
+         super().__init__(**kwargs)
+         self.bash_command = bash_command  # templateable (can also give path to .sh or .bash script)
+         self.env = env  # templateable
+         self.output_encoding = output_encoding  # not templateable
+         
+   By default, Airflow searches for script.sh relative to directory DAG file is defined in.
+   So if your DAG is stored in /path/dag.py and script is stored in /path/scripts/script.sh, 
+   you would set the value of bash_command to scripts/script.sh.
+   Additional "search paths" can be controlled at DAG-level with template_searchpath argument:
+   Example
+      with DAG(..., template_searchpath="/tmp") as dag:
+         run_this = BashOperator(task_id="run_this", bash_command="script.sh")
+      # Now you can store your Bash script in /tmp or any sub folder just correctly
+      # specify it relative to /tmp folder and Airflow will find it. 
+
+Validating Templates
+   The output of templates can be checked in both the Airflow UI and CLI. 
+   One advantage of the CLI is that you don't need to run any tasks before seeing the result.
+
+   The Airflow CLI command "airflow tasks render [dag_id] [task_id] [execution_date|dummy]"
+   renders all templateable attributes of a given task. 
+   Example
+      # For this command to work, Airflow must have access to a metastore. 
+      # You can quickly set up a local SQLite metastore to achieve this:
+      # airflow db init  ## generates airflow.db, airflow.cfg, and webserver_config.py in your project dir
+      $ airflow tasks render example_dag run_this 2021-01-01
+
+      # ----------------------------------------------------------
+      # property: bash_command
+      # ----------------------------------------------------------
+      echo "Today is Friday"
+
+      # ----------------------------------------------------------
+      # property: env
+      # ----------------------------------------------------------
+      None
+
+   In the Airflow UI, you can view the result of templated attributes after running a task.
+   Click on a task instance --> Rendered button to output the templated attributes
+   
+Using Custom variables and Functions in Templates
+   When defining attributes of task using templates we can encounter many errors like:
+   {{ datetime.now() }},  # raises jinja2.exceptions.UndefinedError: 'datetime' is undefined
+   
+   However, it is possible to inject functions into your Jinja environment. 
+   In Airflow, several standard Python modules are injected by default for templating, 
+   under the name "macros". These modules are:
+   datetime-timedelta-dateutil-time(datetime.time)-uuid-random
+
+   Example
+      # the above code can be fixed using macros.datetime:
+      BashOperator(
+         task_id="print_now",
+         bash_command="echo It is {{ macros.datetime.now() }}", # out=It is 2021-08-30 13:51:55.820299
+      )
+   
+   Besides pre-injected functions, you can use self-defined variables & functions in templates. 
+   Airflow provides a convenient way to inject these into the Jinja environment. 
+   Example 
+      # we defined a function that print the number of days since May 1st, 2015 in our DAG 
+
+   def days_to_now(starting_date):
+      return (datetime.now() - starting_date).days
+      
+   # To use this inside a Jinja template, you can pass a dict to user_defined_macros in DAG:
+
+   with DAG(
+      dag_id="demo_template",
+      start_date=datetime(2021, 1, 1),
+      schedule_interval=None,
+      user_defined_macros={
+           "starting_date": datetime(2015, 5, 1),  # Macro can be a variable
+           "days_to_now": days_to_now,  # Macro can also be a function
+      },
+   ) as dag:
+      print_days = BashOperator(
+         task_id="print_days",
+         bash_command="echo Days since {{ starting_date }} is {{ days_to_now(starting_date) }}",  # Call user defined macros
+      )
+      # Days since 2015-05-01 00:00:00 is 2313   
+   Functions injected via user_defined_filters and user_defined_macros achieve same result,
+   But it is recommend using filters when you need to import multiple custom functions
+   because the filter formatting improves the readability of your code. 
+   Example
+      "{{ name | striptags | title }}"# chained filters are read naturally from left to right
+      "{{ title(striptags(name)) }}"  # multiple functions difficult to interpret $
+                                      # because reading right to left
+                                      
+a scenario where you're passing a list of values to this function by triggering a DAG with a config that holds some numbers:
+
+with DAG(dag_id="failing_template", start_date=datetime.datetime(2021, 1, 1), schedule_interval=None) as dag:
+    sumnumbers = PythonOperator(
+        task_id="sumnumbers",
+        python_callable=sum_numbers,
+        op_args="{{ dag_run.conf['numbers'] }}",
+    )
+   To get submitted values from users in the Web UI, use “dag_run” conf, . 
+   Example
+      task = BashOperator(task_id='test', command='echo \"Hi $my_message\"',
+                        env={'my_message': {{dag_run.conf['name']}}})
+      PythonTask = PythonOperator(
+        task_id="sumnumbers",
+        python_callable=sum_numbers,
+        op_args="{{ dag_run.conf['numbers'] }}",
+        op_kwargs={'name': 'amin'}
+    )# If we trigger the DAG with the following JSON to the DAG run configuration:
+     # {"numbers": [1,2,3]} The rendered value would be a string. 
+     # So the function unpacks the given string to: ('[', '1', ',', ' ', '2', ',', ' ', '3', ']')User input
+
+    The default Jinja environment outputs strings, but we can configure another environment
+    NativeEnvironment which renders templates as native Python code. 
+    To apply this just enable the ender_template_as_native_obj argument on the DAG class.
+    This argument takes a boolean value which determines whether to render templates
+    with Jinja's default Environment OR NativeEnvironment
+    
+    the Jinja environment must be configured on the DAG-level.
+    This means that all tasks in a DAG render either using default or NativeEnvironment Jinja environment
+
+    
+    
+    
+
+  

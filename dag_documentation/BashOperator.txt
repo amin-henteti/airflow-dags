@@ -1,0 +1,61 @@
+BashOperator
+	Use the BashOperator to execute commands in a Bash shell.
+	Example
+      run_this = BashOperator(
+          task_id='run_after_loop',
+          bash_command='echo 1',
+      )
+   Templating : use Jinja templates to parameterize the bash_command argument
+   The templating is a bit non secure as it take directly the inputs to the commands
+   with no verification and escaping\. There's this problem also using dag_run.config
+   Most of the default template variables are not at risk.
+   Example
+      also_run_this = BashOperator(
+          task_id='also_run_this',
+          bash_command='echo "run_id={{ run_id }} | dag_run={{ dag_run }}"',
+      )
+      bash_task = BashOperator(
+          task_id="bash_task",
+          bash_command="echo \"here is the message: '$message'\"",
+          env={"message": '{{ dag_run.conf["message"] if dag_run else "" }}'},
+      )
+   Jinja template not found
+   Add a space after the script name when directly calling a Bash script
+   This is because Airflow tries to apply a Jinja template to it, which will fail.
+   Example 
+      t2 = BashOperator(
+         task_id="bash_example",
+         # bash_command="/home/batcher/test.sh", # This fails with 'Jinja template not found' error
+
+         bash_command="/home/batcher/test.sh ", # This works (has a space after)
+         dag=dag,
+      )
+   However, if you want to use templating in your bash script, do not add the space 
+   and instead put your bash script in a location relative to the directory containing
+   the DAG file e.g., dags/scripts/bash_example.sh 
+
+   Skipping
+   In general a non-zero exit code produces an AirflowException and thus a task failure. 
+   In cases where it is desirable to instead have the task end in a [[skipped state]], 
+   you can exit with code 99 (or with another exit code if you pass skip_exit_code).
+   Example
+      this_will_skip = BashOperator(
+          task_id='this_will_skip',
+          bash_command='echo "hello world"; exit 99;',
+          dag=dag,
+      )
+   Run from a bash file : if you want to use templating in your bash script, 
+   put your bash script in a location relative to the directory containing the DAG file. 
+   So if your DAG file is in /usr/local/airflow/dags/test_dag.py, 
+   you can move your test.sh file to a location under /usr/local/airflow/dags/
+   and pass the relative path to bash_command
+   Example
+      t2 = BashOperator(
+         task_id="bash_example",
+         # "scripts" folder is under "/usr/local/airflow/dags"
+         bash_command="scripts/test.sh",
+         dag=dag,
+      )
+   
+   
+   

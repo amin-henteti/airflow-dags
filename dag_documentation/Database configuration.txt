@@ -1,0 +1,13 @@
+SQLite database can be used to run Airflow for development purpose 
+as it does not require any database server (the database is stored in a local file)
+But it only works with Sequential Executor and it should NEVER be used for PODUCTION.
+
+Note, that this is not a python library version, 
+it's the SQLite ((system-level application)) that needs to be upgraded.
+to see what version is used by the python interpreter use the python shell by typing python in the developpement environment
+the imporrt sqlite3 > sqlite3.sqlite_version
+
+make sure that the "high-enough" version of SQLite is the only version installed in your system.
+
+URI for the sqlite databases
+sqlite:////home/airflow/airflow.db

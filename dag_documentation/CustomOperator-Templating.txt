@@ -1,0 +1,28 @@
+CustomOperator-Templating
+   You can use Jinja templates to parameterize your operator. 
+   Airflow considers the field names present in template_fields for templating 
+   while rendering the operator.
+   Example 
+      class HelloOperator(BaseOperator):
+         template_fields = ["guest_name"]
+         template_ext = [".sql"] # when using a file we must use _ext because of the conflict with the dot
+         template_fields_renderers = {"name": "json"} # template_fields_renderers 
+                                                      # a dictionary which defines 
+                                                      # in what style the value from 
+                                                      # template_field renders in Web UI. 
+         
+         def __init__(self, name: str, **kwargs) -> None:
+            super().__init__(**kwargs)
+            self.guest_name = name 
+            
+            
+         def execute(self, context):
+            message = f"Hello from {self.name} to sebastien"
+            print(message)
+            return message
+            
+      # We can use the template as follows:
+      with DAG("dummy", default_args=default_args) as dag:
+         hello_task = HelloOperator(
+            task_1="task_1", dag=dag, name="{{ task_instance.task_id }}" # name argument same as in the consructor
+         )

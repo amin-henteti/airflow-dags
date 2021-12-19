@@ -1,0 +1,204 @@
+﻿Plugins
+   Airflow has a simple plugin manager built-in that can integrate external features
+   to its core by simply dropping files in your $AIRFLOW_HOME/plugins folder.
+   
+   
+   The python modules in the plugins folder get imported, and macros and web views 
+   get integrated to Airflow’s main collections and become available for use.
+
+   To troubleshoot issue with plugins, you can use airflow plugins command.
+   This command dumps information about loaded plugins.
+
+   Changed in version 2.0: Importing operators, sensors, hooks added in plugins 
+   via airflow.{operators,sensors,hooks}.<plugin_name> is no longer supported, 
+   and these extensions should just be imported as regular python modules.
+   
+   Use case
+      - An auditing tool, helping understand who accesses what
+      - A config-driven SLA monitoring tool, allowing you to set monitored tables
+      and at what time they should land, alert people, and expose visualizations of outages
+      
+   Airflow has many components that can be reused when building an application:
+      - A web server you can use to render your views
+      - A metadata database to store your models
+      - Access to your databases, and knowledge of how to connect to them
+      - An array of workers that your application can push workload to
+      - Airflow is deployed, you can just piggy back on its deployment logistics
+      - Basic charting capabilities, underlying libraries and abstractions
+   When are plugins (re)loaded?
+      Plugins are by default lazily loaded and once loaded, they are never reloaded
+      (except the UI plugins are automatically loaded in Webserver). 
+      To load them at the start of each Airflow process, 
+      set [core] lazy_load_plugins = False in airflow.cfg.
+      This means that if you make any changes to plugins and you want the webserver 
+      or scheduler to use that new code, you will need to restart those processes.
+      To enable automatic reloading of the webserver, when changes in a directory 
+      with plugins has been detected, you should set reload_on_plugin_change option
+      in [webserver] section to True.
+      
+   To create a plugin you will need to derive the airflow.plugins_manager.AirflowPlugin class
+   and reference the objects you want to plug into Airflow. 
+   
+   Example
+      """
+      defines a plugin that injects a set of dummy object definitions in Airflow.
+      """
+      # This is the class you derive to create a plugin
+      from airflow.plugins_manager import AirflowPlugin
+
+      from flask import Blueprint
+      from flask_appbuilder import expose, BaseView as AppBuilderBaseView
+
+      # Importing base classes that we need to derive
+      from airflow.hooks.base import BaseHook
+      from airflow.models.baseoperator import BaseOperatorLink
+      from airflow.providers.amazon.aws.transfers.gcs_to_s3 import GCSToS3Operator
+
+      # Will show up in Connections screen in a future version
+      class PluginHook(BaseHook):
+         pass
+
+
+      # Will show up under airflow.macros.test_plugin.plugin_macro
+      # and in templates through {{ macros.test_plugin.plugin_macro }}
+      def plugin_macro():
+         pass
+
+
+      # Creating a flask blueprint to integrate the templates and static folder
+      bp = Blueprint(
+      "test_plugin",
+      __name__,
+      template_folder="templates",  # registers airflow/plugins/templates as a Jinja template folder
+      static_folder="static",
+      static_url_path="/static/test_plugin",
+      )
+
+      # Creating a flask appbuilder BaseView
+      class TestAppBuilderBaseView(AppBuilderBaseView):
+      default_view = "test"
+
+      @expose("/")
+      def test(self):
+      return self.render_template("test_plugin/test.html", content="Hello galaxy!")
+
+
+      # Creating a flask appbuilder BaseView
+      class TestAppBuilderBaseNoMenuView(AppBuilderBaseView):
+      default_view = "test"
+
+      @expose("/")
+      def test(self):
+      return self.render_template("test_plugin/test.html", content="Hello galaxy!")
+
+
+      v_appbuilder_view = TestAppBuilderBaseView()
+      v_appbuilder_package = {
+      "name": "Test View",
+      "category": "Test Plugin",
+      "view": v_appbuilder_view,
+      }
+
+      v_appbuilder_nomenu_view = TestAppBuilderBaseNoMenuView()
+      v_appbuilder_nomenu_package = {"view": v_appbuilder_nomenu_view}
+
+      # Creating flask appbuilder Menu Items
+      appbuilder_mitem = {
+      "name": "Google",
+      "href": "https://www.google.com",
+      "category": "Search",
+      }
+      appbuilder_mitem_toplevel = {
+      "name": "Apache",
+      "href": "https://www.apache.org/",
+      }
+
+      # A global operator extra link that redirect you to
+      # task logs stored in S3
+      class GoogleLink(BaseOperatorLink):
+      name = "Google"
+
+      def get_link(self, operator, dttm):
+      return "https://www.google.com"
+
+
+      # A list of operator extra links to override or add operator links
+      # to existing Airflow Operators.
+      # These extra links will be available on the task page in form of
+      # buttons.
+      class S3LogLink(BaseOperatorLink):
+      name = "S3"
+      operators = [GCSToS3Operator]
+
+      def get_link(self, operator, dttm):
+      return "https://s3.amazonaws.com/airflow-logs/{dag_id}/{task_id}/{logical_date}".format(
+      dag_id=operator.dag_id,
+      task_id=operator.task_id,
+      logical_date=dttm,
+      )
+
+
+      # Defining the plugin class
+      class AirflowTestPlugin(AirflowPlugin):
+      name = "test_plugin"
+      hooks = [PluginHook]
+      macros = [plugin_macro]
+      flask_blueprints = [bp]
+      appbuilder_views = [v_appbuilder_package, v_appbuilder_nomenu_package]
+      appbuilder_menu_items = [appbuilder_mitem, appbuilder_mitem_toplevel]
+      global_operator_extra_links = [
+      GoogleLink(),
+      ]
+      operator_extra_links = [
+      S3LogLink(),
+      ]
+   You can Exclude views from CSRF protection but you should protect all your views with CSRF. 
+   To do so, you can exclude csrf from some views using a decorator.
+   Example 
+      from airflow.www.app import csrf
+
+      @csrf.exempt
+      def my_handler():
+         # ...
+         return "ok"
+
+Plugins as Python packages
+   It is possible to load plugins via setuptools entrypoint mechanism. 
+   To do this link your plugin using an entrypoint in your package. 
+   If the package is installed, airflow will automatically load the registered plugins
+   from the entrypoint list.
+   
+   Exampe
+      #### my_package/my_plugin.py
+      from airflow.plugins_manager import AirflowPlugin
+      from flask import Blueprint
+
+      # Creating a flask blueprint to integrate the templates and static folder
+      bp = Blueprint(
+         "test_plugin",
+         __name__,
+         template_folder="templates", # registers airflow/plugins/templates as a Jinja template folder
+         static_folder="static",
+         static_url_path="/static/test_plugin",
+      )
+
+      class MyAirflowPlugin(AirflowPlugin):
+         name = "my_namespace"
+         flask_blueprints = [bp]
+      
+      ###########################################
+      # import plugin using setuptool
+      from setuptools import setup
+      setup(
+         name="my-package",
+         # ...
+         entry_points={
+         "airflow.plugins": ["my_plugin = my_package.my_plugin:MyAirflowPlugin"]
+         },
+      )
+
+    
+
+
+
+   

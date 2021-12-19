@@ -1,0 +1,28 @@
+Trigger Rules
+   By default, Airflow will wait for all upstream tasks for a task to be successful 
+   before it runs that task.
+   However, this is just the default behaviour, and you can control it using trigger_rule 
+   argument to a Task. The options for trigger_rule are below.
+   You almost never want to use all_success or all_failed downstream of a branching operation.
+   You should instead set trigger_rule to none_failed_min_one_success in the task
+   1) all_success (default): All upstream tasks have succeeded
+
+      2) all_failed: All upstream tasks are in a failed or upstream_failed state
+
+      3) all_done: All upstream tasks are done with their execution
+
+      4) one_failed: At least one upstream task has failed (does not wait for all upstream tasks to be done)
+
+      5) one_success: At least one upstream task has succeeded 
+      (does not wait for all upstream tasks to be done)
+
+      6) none_failed: All upstream tasks have not failed or upstream_failed - 
+      that is, all upstream tasks have succeeded or been skipped
+
+      7) none_failed_min_one_success: All upstream tasks have not failed or upstream_failed,
+      and at least one upstream task has succeeded.
+
+      8) none_skipped: No upstream task is in a skipped state - 
+      that is, all upstream tasks are in a success, failed, or upstream_failed state
+
+      9) always: No dependencies at all, run this task at any time

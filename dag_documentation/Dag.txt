@@ -1,0 +1,74 @@
+DAG
+   Directed Acyclic Graph) is the core concept of Airflow, collecting Tasks together, 
+   organized with dependencies and relationships to say how they should run.
+   When Airflow comes to load DAGs from a Python file, 
+   it will only pull any objects at the top level (in the globals()) that are a DAG instance.
+   Dag doesn't care about what is happening inside the tasks, it is merely concerned with :
+   - how to execute them,
+   - the order to run them in, 
+   - how many times to retry them, 
+   - if they have timeouts...
+   @dag decorator declaration sets up any parameters you have in your function as DAG parameters,
+   letting you set those parameters when triggering the DAG. 
+   Can access the parameters from Python code, or from {{ context.params }} inside a Jinja template.
+   
+Running DAGs
+   DAGs will run in one of two ways: 
+      1) When they are triggered either manually by a command (airflow dags run dag_name)
+      2) via the API
+   Every time you run a DAG, you are creating a new instance of that DAG 
+   which Airflow calls a DAG Run. 
+   DAG Runs can run in parallel for the same DAG, and each has a defined [[data interval]], 
+   which identifies the period of data the tasks should operate on. which is useful
+   Example
+      consider writing a DAG that processes a daily set of experimental data. 
+      It's been rewritten, and you want to run it on the previous 3 months of data
+      ---no problem, since Airflow can backfill the DAG and run copies of it for every day
+      in those previous 3 months, all at once.
+
+      Those DAG Runs will all have been started on the same actual day, 
+      but each DAG run will have one data interval covering one day in that 3 month period,
+      and that data interval is all the tasks, operators and sensors inside the DAG
+      look at when they run.
+      In much the same way a DAG instantiates into a DAG Run every time it's run, 
+      Tasks specified inside DAG are also instantiated into (Task Instances) along with it.
+      An instance of a Task is a specific run of that task for a given DAG 
+      (and thus for a given data interval). They are also the representation of a Task that has state, representing what stage of the lifecycle it is in.
+DAG Dependencies
+   dependencies between DAGs are a bit complex. 
+   There are 2 ways in which one DAG can depend on another:
+      1) triggering - TriggerDagRunOperator
+      2) waiting - ExternalTaskSensor
+   Additional difficulty is that one DAG could wait for or trigger several runs 
+   of the other DAG with different data intervals. 
+   The Dag Dependencies view Menu -> Browse -> DAG Dependencies helps visualize dependencies
+   The dependencies are calculated by the scheduler during DAG serialization 
+   and the webserver uses them to build the dependency graph.
+   The dependency detector is configurable, so you can implement your own logic different than the defaults in DependencyDetector
+
+Task Dependencies
+   A Task/Operator does not usually live alone; 
+   it has dependencies on other tasks (upstream of it), other depend on it (downstream of it). 
+   Declaring these dependencies between tasks is what makes up the DAG structure (the edges of DAG).
+   Example
+      - use the >> and << operators : first_task >> [second_task, third_task]
+      - set_upstream and set_downstream methods : first_task.set_downstream(second_task, third_task)
+      - cross_downstream([op1, op2], [op3, op4]) make two lists of tasks depend on all parts of each other :
+      - chain(*[DummyOperator(task_id='op'+i) for i in range(6)]) add dependencies dynamically
+      - chain(t1, [t2, t3], [t4, t5], t6) pairwise dependencies for lists the same size
+
+Documentation
+   It's possible to add documentation or notes to your DAGs & task objects that are visible
+   in the web interface ("Graph" & "Tree" for DAGs, "Task Instance Details" for tasks).
+   """
+   ### My great DAG
+   """
+
+   dag = DAG("my_dag", default_args=default_args)
+   dag.doc_md = __doc__
+
+   t = BashOperator("foo", dag=dag)
+   t.doc_md = """\
+   #Title"
+   Here's a [url](www.airbnb.com)
+   """

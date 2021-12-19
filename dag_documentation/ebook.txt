@@ -1,0 +1,122 @@
+the Dag graph represent a pipeline, because it’s both directed and acyclic!
+
+a DAG is idempotent if every DAG Run generates the same results even when run multiple times. 
+Designing idempotent DAGs decreases recovery time from failures and prevents data loss.
+
+“top-level code” to mean any code that isn’t part of your DAG or Operator instantiations.
+Because Airflow executes all code in the DAGS_Folder on every scheduler heartbeat,
+top-level code that makes requests to external systems, like an API or a database, 
+or makes function calls outside of your tasks can cause performance issues.
+As a tip Treat your DAG file like a config file and leave all of the heavy lifting 
+to the hooks and Operators that you instantiate in the local scope. 
+If DAGs need to access additional code like SQL script or a Python function, 
+keep that code in a separate file that can be read into a DAG Run then make import INSIDE functions that call them.
+
+DAG from a Design point of vue should be idempotent, efficient, and readable. to do so :
+   Keep Tasks Atomic : When breaking up pipeline into tasks, each task should be atomic. 
+   This means each task should be responsible for one operation that can be rerun independently of the others. 
+   Example
+      in an ETL pipeline you would ideally want your Extract, Transform, and Load operations 
+      covered by three separate tasks. 
+      Atomizing these tasks allows you to rerun each operation in the pipeline independently, which supports idempotence.
+
+There are sensors for many use cases,
+   Example
+      check a database for a certain row, 
+      wait for a certain time of day, 
+      sleep for a certain amount of time. 
+   All sensors inherit from BaseSensorOperator & have 4 parameters you can set on any sensor.
+      1) soft_fail: Set to true to mark the task as SKIPPED on failure.
+      
+      2) poke_interval: Time in seconds that the job should wait in between each try. 
+      The poke interval should be more than one minute to prevent too much load on scheduler.
+
+      3) timeout: Time, in seconds before the task times out and fails.
+
+      4) mode: How the sensor operates. Options are: { poke | reschedule }, default is poke.
+      When set to "poke" the sensor will take up a worker slot for its whole execution time (even between pokes). 
+      Use this mode if the expected runtime of the sensor is short 
+      or if a short poke interval is required. 
+      When set to "reschedule" the sensor task frees the worker slot 
+      when the criteria is not met and it’s rescheduled at a later time.
+      
+SubDAGs 
+   They 'were' a way of presenting a cleaner-looking DAG by capitalizing on code patterns.
+   For example, ETL DAGs usually share a pattern of tasks that extract data from a source,
+   transform the data, and load it somewhere. 
+   The SubDAG would visually group the repetitive tasks into one UI task, 
+   making the pattern between tasks clearer. 
+   However, SubDAGs were really just DAGs embedded in other DAGs. 
+   This caused both performance and functional issues:
+      - When a SubDAG is triggered, the SubDAG and child tasks take up worker slots 
+      until the entire SubDAG is complete. This can delay other task processing and, 
+      depending on your number of worker slots, can lead to deadlocking.
+      
+      - SubDAGs have their own parameters, schedule, and enabled settings.
+        When these are not consistent with their parent DAG, unexpected behavior can occur.
+   Other solution is group task which avoid the issues caused by the subdags
+   and provide a better only UI grouping to organize task in graph tree
+   
+   To use Task Groups you’ll need to use the following import statement.
+      from airflow.utils.task_group import TaskGroup
+
+   You can use dependency Operators (<< and >>) on Task Groups in the
+   same way that you can with individual tasks. 
+   Dependencies applied to a Task Group are applied across its tasks. 
+
+      t0 = DummyOperator(task_id=’start’)
+      
+      # Start Task Group definition
+      with TaskGroup(group_id=’group1’) as tg1:
+         t1 = DummyOperator(task_id=’task1’)
+         t2 = DummyOperator(task_id=’task2’)
+         t1 >> t2
+      # End Task Group definition
+      
+      t3 = DummyOperator(task_id=’end’)
+      # Set Task Group’s (tg1) dependencies
+      t0 >> tg1 >> t3
+
+   When your task is within a Task Group, your callable task_id will be
+   the task_id prefixed with the group_id (i.e. group_id.task_id). 
+   This ensures uniqueness of the task_id across the DAG. 
+   This is important to remember when calling specific tasks with XCOM passing or branching
+
+   We can dynamically generate task group, using a loop to generate Task Groups 
+   This will put them in parallel.
+   Example
+      for g_id in range(1,3):
+         with TaskGroup(group_id=f’group{g_id}’) as tg1:
+            t1 = DummyOperator(task_id=’task1’)
+            t2 = DummyOperator(task_id=’task2’)
+            t1 >> t2
+   if the groups are dependent we can use lists and condition and draw the dependencies
+   we can still introduce variations to the pattern while avoiding code redundancies 
+   from building each Task Group definition manually.
+   Example
+      groups = []
+      for g_id in range(1,4):
+         tg_id = f’group{g_id}’
+         with TaskGroup(group_id=tg_id) as tg1:
+            t1 = DummyOperator(task_id=’task1’)
+            t2 = DummyOperator(task_id=’task2’)
+            t1 >> t2
+            if tg_id == ‘group1’:
+               t3 = DummyOperator(task_id=’task3’)
+               t1 >> t3
+            groups.append(tg1)
+      [groups[0] , groups[1]] >> groups[2]
+      
+   For additional complexity, you can nest Task Groups. Building on ETL example, 
+   when calling API endpoints, we may need to process new records for each endpoint 
+   before we can process updates to them.
+   We can have a top-level Task Groups represent our new and updated record processing, 
+   while the nested Task Groups represent our API endpoint processing  
+      
+
+      
+      
+      
+      
+      
+      

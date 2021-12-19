@@ -1,0 +1,57 @@
+the old version of of dag definition uses with DAG(schedule_inerval = None, start_date=datetime(2021, 11, 15), catchup=False) as dag:
+
+task definition is by defining a function with **kwargs to maybe use Xcom to pull and push variables between tasks using the under the hood variable ti = kwargs['ti']
+
+e.g., the extract task 
+    def extract(**kwargs):
+        ti = kwargs['ti']
+        data_string = '{"1001": 301.27, "1002": 433.21, "1003": 502.22}'
+        ti.xcom_push('order_data', data_string) # send the data of data_string to outer scope and it is called a xcom variable (cross communication btw tasks)
+				    # to be viewed/used by other functions using ti.xcom_pull(task_ids="extract", key = 'order_data') 
+THEN theres second step in the definition of the task because so far we only defined the function, we musk invoke the task
+    extract_task = PythonOperator(
+        task_id='extract', 
+        python_callable=extract, # name of the python function associated with the task
+    )
+also its recommanded to add a documentation for the task 
+extract.doc_md = dedent("""\
+this is a documentation for an old definition for a task
+""")
+
+
+ALL of this can be compactly written in AF 2.0 As
+    @task()
+    def extract():
+        """
+        this is a documentation for a new definition for a task
+        """
+        data_string = '{"1001": 301.27, "1002": 433.21, "1003": 502.22}'
+
+        order_data_dict = json.loads(data_string)
+        return order_data_dict
+All of the Xcom usage for data passing between these tasks is abstracted away from the DAG author in Airflow 2.0. 
+However, Xcom variables are used behind the scenes and can be viewed using the Airflow UI as necessary for debugging or DAG monitoring.
+the invocation of tasks dependencies are automatically generated through the return and call variables of each function
+
+
+BENEFITS
+Adding dependencies to decorated tasks from regular tasks
+The above tutorial shows how to create dependencies between python-based tasks. 
+However, it is quite possible while writing a DAG to have some pre-existing tasks such as BashOperator or FileSensor based tasks which need to run before a python-based task.
+
+Building this dependency is shown in the code below
+@task()
+def extract_from_file():
+    """
+    Extract from file task: A simple Extract task to get data ready for the rest of the data pipeline, by reading the data from a file into a pandas dataframe
+    """
+    order_data_file = "/tmp/order_data.csv"
+    order_data_df = pd.read_csv(order_data_file)
+
+file_task = FileSensor(task_id="check_file", filepath="/tmp/order_data.csv") 
+order_data = extract_from_file() # !!!!!!!!!!!!!!!!!!! old or new version
+file_task >> order_data # !!!!!!!!!!!!!!!!!!! old or new version
+
+In the above code block, a new python-based task is defined as extract_from_file which reads the data from a known file location. In the main DAG, a new FileSensor task is defined to check for this file. Please note that this is a Sensor task which waits for the file. Finally, a dependency between this Sensor task and the python-based task is specified
+
+also somespecial operator like simplehttpop have the argument (do_xcom_push=True) to push directly its output to the xcom and this value can be used afterwards by a python based task by Simp_Http_task.output

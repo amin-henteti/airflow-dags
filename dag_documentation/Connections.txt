@@ -1,0 +1,142 @@
+Connections 
+   Airflow is often used to pull and push data into other systems, 
+   and so it has a first-class Connection concept for storing credentials 
+   that are used to talk to external systems.
+   
+   A Connection is essentially set of parameters 
+      1) username|Login - specify the user name to connect
+      2) password|Password - specify the password to connect
+      3) hostname|Host - the host to connect to
+      4) type of system that it connects to
+      5) unique name, called the conn_id
+      7) Schema - specify the schema name to be used in the database
+      8) Extra - specify extra parameters (as json dict) that can be used in postgres connection. 
+         The following parameters out of the standard python parameters are supported:
+         * sslmode - determines whether or with what priority a secure SSL TCP/IP connection 
+            will be negotiated with the server. 
+            The are 6 modes : disable, allow, prefer, require, verify-ca, verify-full.
+         * sslcert - specifies file name of the client SSL certificate replacing the default.
+         * sslkey - specifies file name of the client SSL key, replacing the default.
+         * sslrootcert - specifies file name containing SSL certificate authority(CA)certificate(s).
+         * sslcrl - specifies file name of the SSL certificate revocation list (CRL).
+         * application_name - Specifies a value for the application_name configuration parameter.
+         * keepalives_idle - Controls the number of seconds of inactivity after which
+            TCP should send a keepalive message to the server.
+         Example
+            # Extra field
+            {
+               "sslmode": "verify-ca",
+               "sslcert": "/tmp/client-cert.pem",
+               "sslca": "/tmp/server-ca.pem",
+               "sslkey": "/tmp/client-key.pem"
+            }
+   They can be created and managed via the UI or via the CLI; 
+   see Managing Connections for more information on creating, editing and managing connections.
+   You can use Connections by 3 means : 
+      1) directly from your own code
+      2) via Hooks 
+      3) from templates: echo {{ conn.<conn_id>.host }}
+      
+Postgres connection/hook/operator
+   When specifying the connection as URI (in AIRFLOW_CONN_{CONN_ID} variable) 
+   you should specify it following the standard syntax of DB connections, 
+   where extras are passed as parameters of the URI 
+   (note that all components of the URI should be URL-encoded).
+   export AIRFLOW_CONN_POSTGRES_DEFAULT=postgresql://postgres_user:XXXXXXXXXXXX@1.1.1.1:5432/
+                                       postgresdb?sslmode=verify-ca
+                                       &sslcert=%2Ftmp%2Fclient-cert.pem
+                                       &sslkey=%2Ftmp%2Fclient-key.pem
+                                       &sslrootcert=%2Ftmp%2Fserver-ca.pem'
+PostgresOperator
+   It delegates its heavy ligting to PostgresHook
+   it is operator to run SQL statement and require 2 arguments; sql and postgres_conn_id
+   These parameters are fed to PostgresHook object that connect directly with postgresDB
+   Example
+      import datetime
+      from airflow import DAG
+      from airflow.providers.postgres.operators.postgres import PostgresOperator
+
+      # create_pet_table, populate_pet_table, get_all_pets, and get_birth_date 
+      # are examples of tasks created by instantiating the Postgres Operator
+
+      with DAG(
+         dag_id="postgres_operator_dag",
+         start_date=datetime.datetime(2020, 2, 2),
+         schedule_interval="@once",
+         catchup=False,
+      ) as dag:
+         create_pet_table = PostgresOperator(
+            task_id="create_pet_table",
+            sql="""
+               CREATE TABLE IF NOT EXISTS pet (
+               pet_id SERIAL PRIMARY KEY,
+               name VARCHAR NOT NULL,
+               pet_type VARCHAR NOT NULL,
+               birth_date DATE NOT NULL,
+               OWNER VARCHAR NOT NULL);
+               """,
+            )
+      # other version of this code is to refactor the sql command to a separate file 
+      # saved in dags/sql/pet_schema.sql for example
+      # the in the task delaration parameter set 'sql' to 'sql/pet_schema.sql'
+      # we can also add INSERT sql commands i the file and they would be executed
+   We can pass parameters to the SQL query using 'parameters' attribute
+   Both parameters & params (from BaseOperator) make it possible to dynamically pass parameters in many interesting ways.
+   Example
+      # To find the owner of the pet called ‘Lester’:
+      get_birth_date = PostgresOperator(
+         task_id="get_birth_date",
+         postgres_conn_id="postgres_default",
+         sql="SELECT * FROM pet WHERE birth_date BETWEEN SYMMETRIC %(begin_date)s AND %(end_date)s",
+         parameters={"begin_date": "2020-01-01", "end_date": "2020-12-31"},
+      )
+      # Now lets refactor our get_birth_date task by creating a sql file.
+      # Instead of dumping SQL statements directly into our code, we save it in a file
+      -- dags/sql/birth_date.sql -- using jinja templates
+      SELECT * FROM pet WHERE birth_date BETWEEN SYMMETRIC {{ params.begin_date }} AND {{ params.end_date }};
+      # And this time we will use the params attribute 
+      # which we get for free from the parent BaseOperator class.
+      get_birth_date = PostgresOperator(
+         task_id="get_birth_date",
+         postgres_conn_id="postgres_default",
+         sql="sql/birth_date.sql",
+         params={"begin_date": "2020-01-01", "end_date": "2020-12-31"},
+      )
+   When working with database its common to create tasks responsible of the stages of 
+   data process : create_table >> populate >> fetch_all_data >> fetch_dynamic_query
+       
+Managing Connections
+   Airflow needs to know how to connect to your environment. 
+   Information such as hostname, port, login and passwords to other systems and services 
+   is handled in the Admin->Connections section of the UI. 
+   the pipeline code, you will author, will reference the ‘conn_id’ of the Connection objects.
+   Fill in the Connection Id field with the desired connection ID. It is recommended that you use lower-case characters and separate words with underscores.
+   To create to create a new connection. 
+      1) Click the Admin->Connections>Create link(+).
+      2) Choose the connection type with the Connection Type field.
+      3) Fill in the remaining fields. 
+      4) Click the Save button to create the connection.
+   We can also create and manage a connection using the CLI 
+   Example  
+      airflow connections add 'my_prod_db' \
+      --conn-uri 'my-conn-type://login:password@host:port/schema?param1=val1&param2=val2'
+      # export connection to a file 
+      # output : key-value pair of connection ID and the definitions of one or more connections.
+      airflow connections export connections.json
+   We can generate a connection URI
+   c = Connection(
+      conn_id="some_conn",
+      conn_type="mysql",
+      description="connection description",
+      host="myhost.com",
+      login="myname",
+      password="mypassword",
+      extra=json.dumps(dict(this_param="some val", that_param="other val*")),
+   )
+   We can test connection through calling connections rest api
+   To test a connection Airflow calls out the test_connection method from the associated hook
+   class and reports the results of it. The hook may don't have an implemented text_connection
+   method if so an appropriate error message will be thrown
+   
+      
+

@@ -1,0 +1,75 @@
+Built-in PYTHONPATH entries in Airflow
+   Airflow, when running dynamically adds three directories to the sys.path:
+      1) dags folder: configured with option dags_folder in section [core].
+      2) config folder: configured by setting AIRFLOW_HOME variable 
+      ({AIRFLOW_HOME}/config) by default.
+      3) plugins Folder: It is configured with option plugins_folder in section [core].
+
+Don’t use relative imports
+   Never use relative imports (starting with '.') that were added in Python 3.
+   Example
+      # This is tempting to do something like that it in my_dag1.py:
+      from .base_dag import BaseDag  # NEVER DO THAT!!!!
+      # You should import such shared dag using full path 
+      # (starting from the directory which is added to PYTHONPATH):
+      from my_company.my_custom_dags.base_dag import BaseDag  # This is cool
+      
+Add __init__.py in package folders
+   When you create folders you should add __init__.py file as empty files in your folders.
+   While in Python 3 there is a concept of implicit namespaces 
+   where you do not have to add those files to folder, 
+   But Airflow expects that the files are added to all packages you added.
+
+Adding directories to the PYTHONPATH
+   You can specify additional directories to be added to sys.path using PYTHONPATH env var.
+   Start the python shell by providing the path to root of your project using :
+      PYTHONPATH=/home/arch/projects/airflow_operators python
+   then we can import code from this directory in our dags using :
+      import airflow_operators
+   We can also use PYTHONPATH variable with the airflow commands using :
+      PYTHONPATH=/home/arch/projects/airflow_operators airflow info
+      
+Create your Python package
+   You can install your Plugins and Provider packages as python packages 
+   so it is beneficial to learn how to create your own package
+   setuptools is a package development process library designed for creating 
+   and distributing Python packages.
+   we need also the default wheel package which provides a bdist_wheel cmd for setuptools. 
+   It creates ".whl" file which is directly installable through the pip install command.
+   We can then upload the same file to PyPI.
+   
+   1) pip install --upgrade pip setuptools wheel
+   2) Create the package directory - mkdir airflow_operators
+   3) Create the file __init__.py inside the package and add a code: print("Hello op")
+      This code is used just for test purposes, it will be executed when importing package
+   4) Create a file setup.py: "import setuptools setuptools.setup( name="airflow_operators",)
+   5) Build the backage using the command python setup.py bdist_wheel
+      This will create a few directories in the project 
+   6) install the .whl file using pip using
+      pip install dist/airflow_operators-0.0.0-py3-none-any.whl
+   7) the package is now ready using 
+      import airflow_operators
+      And we can remove the package using:
+      pip uninstall airflow_operators
+   To publish package to Python Package Index PyPI it is recommanded to use twine like setuptools
+      I) register an account on TestPyPI, which is a separate instance of the package index 
+      intended for testing and experimentation. In fact we don’t want upload to real index. 
+      To register an account, go to https://test.pypi.org/account/register/ and complete the steps on that page. 
+      2) You will also need to verify your email address before you’re able to upload any packages. For more details, see Using TestPyPI.
+      3) To securely upload your project, you’ll need a PyPI API token. 
+      Create one at https://test.pypi.org/manage/account/#api-tokens, 
+      setting the “Scope” to “Entire account”. 
+      Don’t close the page until you have copied and saved the token — you won’t see it again.
+      4) Now that you are registered, you can use twine to upload the distribution packages.
+      You’ll need to install Twine: python -m pip install --upgrade twine
+
+      5) Once installed, run Twine to upload all of the archives under dist:
+      python -m twine upload --repository testpypi dist/*
+      6) You will be prompted for a username and password. 
+      For the username, use __token__. 
+      For the password, use the token value, including the pypi- prefix
+      7) Now you can install your deployed package at testpypi
+      python -m pip install --index-url https://test.pypi.org/simple/ --no-deps example-pkg-YOUR-USERNAME-HERE
+
+      
+

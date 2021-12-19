@@ -1,0 +1,56 @@
+XCom 
+   It is used to pass data from one Tasks/operators Task/Operator to another
+   It is identified by a key (essentially its name), as well as the task_id and dag_id 
+   it came from. They can have any (serializable) value, 
+   but they are only designed for small amounts of data; 
+   not use them to pass around large values, like dataframes.
+   
+   Many operators will auto-push their results into an XCom key called return_value
+   if the do_xcom_push argument is set to True (as it is by default), and @task functions do this as well.
+   Example
+      # Pulls the return_value XCOM from "pushing_task"
+      value = task_instance.xcom_pull(task_ids='pushing_task')
+   You can also use XComs in templates:
+   Example
+      SELECT * FROM {{ task_instance.xcom_pull(task_ids='foo', key='table_name') }}
+      
+   Custom Backend 
+   The XCom system has interchangeable backends, and you can set which backend is being
+   used via the xcom_backend configuration option.
+   If you want to implement your own backend, you should subclass BaseXCom, 
+   and override the serialize_value and deserialize_value methods.
+   
+Variables
+   Airflow’s runtime configuration concept - a general key/value store
+   that is global and can be queried from your tasks, and easily set via Airflow’s UI,
+   or bulk-uploaded as a JSON file.
+   Variables are a generic way to store and retrieve arbitrary content or settings 
+   as a simple key value store within Airflow. 
+   Variables can be listed, created, updated and deleted from the UI (Admin -> Variables), code or CLI.
+   Variables are really only for values that are truly runtime-dependent.
+   
+   The environment variable naming convention is AIRFLOW_VAR_{VARIABLE_NAME}, 
+   So if your variable key is FOO then the variable name should be AIRFLOW_VAR_FOO.
+      export AIRFLOW_VAR_FOO=BAR # for json use (export AIRFLOW_VAR_FOO_BAZ='{"hello":"world"}')
+
+   Example
+      from airflow.models import Variable
+
+      # Normal call style
+      foo = Variable.get("foo")
+
+      # Auto-deserializes a JSON value
+      bar = Variable.get("bar", deserialize_json=True)
+
+      # Returns the value of default_var (None) if the variable is not set
+      baz = Variable.get("baz", default_var=None)
+      
+   Can be used in templates
+   Example
+      # Raw value
+      echo {{ var.value.<variable_name> }}
+
+      # Auto-deserialize JSON value
+      echo {{ var.json.<variable_name> }}
+
+

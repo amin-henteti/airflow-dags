@@ -1,0 +1,61 @@
+Architecture Overview 
+   Airflow is a platform that lets you build and run workflows. 
+   A workflow is represented as a DAG (a Directed Acyclic Graph), 
+   and contains individual pieces of work called Tasks, philippe[ frank
+   arranged with dependencies and data flows taken into account.
+
+An Airflow installation 
+   It consists of the following components:
+      1) A scheduler, which handles both triggering scheduled workflows, 
+      and submitting Tasks to the executor to run.
+
+      2) An executor, which handles running tasks. In the default Airflow installation, 
+      this runs everything inside the scheduler, but most production-suitable executors 
+      actually push task execution out to workers.
+
+      3) A webserver, which presents a handy user interface to inspect, 
+      trigger and debug the behaviour of DAGs and tasks.
+
+      4) A folder of DAG files, read by the scheduler and executor 
+      (and any workers the executor has)
+
+      5) A metadata database, used by the scheduler, executor and webserver to store state.
+
+Workloads
+   A DAG runs through a series of Tasks, and there are three common types of task :
+   Internally, they all actually subclasses of Airflow's BaseOperator, 
+   and the concepts of Task and Operator are somewhat interchangeable, 
+   but it's useful to think of them as separate concepts 
+   Operators & Sensors are templates, and when you call one in DAG file, you're making Task.
+      1) Operators, predefined tasks that you can string together quickly 
+      to build most parts of your DAGs.
+
+      2) Sensors, a special subclass of Operators which are entirely about waiting for 
+      an external event to happen.
+
+      3) A TaskFlow-decorated @task, which is a custom Python function packaged up as Task.
+
+
+Control Flow : XComs
+   To pass data between tasks you have two options:
+
+      1) XComs ("Cross-communications"), a system where you can have tasks 
+      push and pull small bits of metadata.
+
+      2) Uploading and downloading large files from a storage service 
+      (either one you run, or part of a public cloud)
+
+   Airflow sends out Tasks to run on Workers as space becomes available, 
+   so there's no guarantee all the tasks in your DAG will run on same worker or same machine.
+
+   # subdag
+   Airflow provides several mechanisms for making complex dag more sustainable 
+   - SubDAGs let you make "reusable" DAGs you can embed into other ones, 
+   and TaskGroups let you visually group tasks in the UI.
+   Marking success on a SubDagOperator does not affect the state of the tasks within it.
+
+   # hook
+   There are also features for letting you easily pre-configure access to a central resource,
+   e.g a datastore, in the form of Connections & Hooks, and limiting concurrency, via Pools
+   
+

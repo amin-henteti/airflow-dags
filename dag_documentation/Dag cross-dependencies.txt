@@ -1,0 +1,54 @@
+TriggerDagRunOperator
+   It is an easy way to implement cross-DAG dependencies. 
+   This operator allows you to have a task in one DAG that triggers another DAG 
+   in the same Airflow environment.
+   
+   This is IDEAL when you have 1 upstream DAG that needs to trigger 1+ downstream DAGs, 
+   or if you have dependent DAGs that have both upstream and downstream tasks in upstream DAG
+   
+ExternalTaskSensor
+   The downstream DAG will wait until a task is completed in the upstream DAG 
+   before moving on to the rest of the DAG.
+   This method is not as flexible as the TriggerDagRunOperator, 
+   since the dependency is implemented in the downstream DAG. 
+   It is IDEAL when you have a downstream DAG that is dependent on multiple upstream DAGs
+   
+   If you want the downstream DAG to wait for the entire upstream DAG to finish 
+   instead of a specific task, you can set the external_task_id to None. 
+   In this case, we specify that the external task must have a state of success 
+   for the downstream task to succeed, as defined by the allowed_states and failed_states.
+   
+   the upstream DAG (example_dag) and downstream DAG (external-task-sensor-dag) 
+   must have the same start date and schedule interval. 
+   This is because the ExternalTaskSensor will look for completion of the specified task
+   or DAG at the same execution_date. 
+   To look for completion of the external task at a different date, 
+   you can make use of either of the execution_delta or execution_date_fn parameters
+   
+Airflow API
+   The Airflow API is another way of creating cross-DAG dependencies. 
+   This has a similar structur as TriggerDagRunOperator, but instead uses the SimpleHttpOperator 
+   to trigger the dependent-dag using the Airflow API.
+   
+   Using the API to trigger a downstream DAG can be implemented within a DAG 
+   by using the SimpleHttpOperator imported from airflow.providers.http.operators.http
+   Example
+      date = '{{ execution_date }}'
+      request_body = {
+        "execution_date": date
+      }
+      json_body = json.dumps(request_body)
+
+      api_trigger_dependent_dag = SimpleHttpOperator(
+        task_id="api_trigger_dependent_dag",
+        http_conn_id='airflow-api',
+        endpoint='/api/v1/dags/dependent-dag/dagRuns', # '/api/v1/dags/<dag-id-want-trigger>/dagRuns
+        method='POST',
+        headers={'Content-Type': 'application/json'},
+        data=json_body
+      )
+   TriggerDagRunOperator and ExternalTaskSensor are designed to work in same Airflow environment, 
+   so they are not ideal for cross-Airflow deployments. 
+   The Airflow API, on the other hand, is perfect for this use case.
+   
+   

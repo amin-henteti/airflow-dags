@@ -1,0 +1,120 @@
+Creating a task
+   You should treat tasks in Airflow equivalent to transactions in a database. 
+   This implies that you should never produce incomplete results from your tasks. 
+   An example is not to produce incomplete data in HDFS or S3 at the end of a task.
+   
+   Airflow can retry a task if it fails. 
+   Thus, the tasks should produce the same outcome on every re-run. 
+   Some of the ways you can avoid producing a different result :
+      * Do not use INSERT during a task re-run, 
+      an INSERT statement might lead to duplicate rows in your database. Use UPSERT instead.
+      
+      * Read and write in a specific partition. Never read the latest available data in task. 
+      Someone may update the input data between re-runs, which results in different outputs. 
+      A better way is to read the input data from a specific partition. 
+      You can use data_interval_start as a partition. 
+      You should follow this partitioning method while writing data in S3/HDFS as well.
+      
+      * The Python datetime now() function gives the current datetime object. 
+      This function should never be used inside a task, 
+      especially to do the critical computation, 
+      as it leads to different outcomes on each run. 
+      It’s fine to use it, for example, to generate a temporary log.
+Deleting a task
+   Be careful when deleting a task from a DAG. 
+   You would not be able to see the Task in Graph View, Tree View, etc 
+   making it difficult to check the logs of that Task from the Webserver. 
+   If that is not desired, please create a new DAG.
+
+Communication
+   Airflow executes tasks of a DAG on =! servers if you are using Kubernetes|Celery executor. 
+   So, you should not store any file or config in the local filesystem 
+   because the next task is likely to run on a different server without access to it 
+   e.g., a task that downloads the data file that the next task processes. 
+   In the case of Local executor, storing a file on disk can make retries harder 
+   e.g., your task requires a config file that is deleted by another task in DAG.
+
+   If possible, use XCom to communicate small messages between tasks 
+   A good way of passing larger data between tasks is to use a remote storage e.g., S3/HDFS.
+   S3: Simple Storage Service and HDFs: Hadoop Distributed Filesystem 
+   Example
+      if we have a task that stores processed data in S3 that task can push the S3 path
+      for the output data in Xcom, and the downstream tasks can pull the path from XCom 
+      and use it to read the data.
+
+   The tasks should also not store any authentication parameters such as passwords or token 
+   inside them. Where at all possible, use Connections to store data securely in Airflow
+   backend and retrieve them using a unique connection id.
+
+Top level Python Code
+   you should avoid writing the top level code which is not necessary to create Operators
+   and build DAG relations between them. 
+   This is because of the design decision for the scheduler of Airflow 
+   and the impact the top-level code parsing speed on both performance and scalability of Airflow.
+
+   Airflow scheduler executes the code outside the Operator’s execute methods 
+   with the minimum interval of min_file_process_interval seconds. 
+   This is done in order to allow dynamic scheduling of the DAGs 
+   - where scheduling and dependencies might change over time and impact the next schedule
+   of the DAG. Airflow scheduler tries to continuously make sure that what you have in DAGs
+   is correctly reflected in scheduled tasks.
+
+   Specifically you should not run any database access, heavy computations and networking operations.
+
+   One of the important factors impacting DAG loading time, that might be overlooked by
+   Python developers is that top-level imports might take surprisingly a lot of time 
+   and they can generate a lot of overhead 
+   This can be easily avoided by converting them to local imports inside Python callables for example.
+   This time saving is significant in case of dynamic DAG configuration, 
+   which can be configured essentially in one of those ways:
+      1) via environment variables (not to be mistaken with the Airflow Variables)
+       Using Airflow Variables at top-level code creates a connection to metadata DB of Airflow
+       to fetch the value, which can slow down parsing and place extra load on the DB
+       
+      2) via externally provided, generated Python code, containing meta-data in DAG folder
+      3) via externally provided, generated configuration meta-data file in the DAG folder
+   Example
+      import numpy as np  # <-- THIS IS A VERY BAD IDEA! DON'T DO THAT!
+      with DAG( dag_id="import_in_top_level")
+      ...
+      
+      # A good practice is to make the import in the local inside the python callable
+      with DAG('import_inside_callable') as dag:
+         def process():
+            import numpy as np
+            print(np.arange(15).reshape(3,5))
+
+Generating Python code with embedded meta-data
+   You can define constants in a seperate file then import the values of these constatnt
+   in you dag for example
+      assume you dynamically generate (in your DAG folder), 
+      the my_company_utils/common.py file:
+         # This file is generated automatically !
+         ALL_TASKS = ["task1", "task2", "task3"]
+      Then you can import and use the ALL_TASKS constant in all your DAGs like that:
+         from my_company_utils.common import ALL_TASKS
+         
+         with DAG(dag_id="my_dag", schedule_interval=None, start_date=days_ago(2)) as dag:
+            for task in ALL_TASKS:
+               # create your operators and relations here
+               pass
+      Don’t forget that in this case you need to add empty __init__.py file in 
+      the my_company_utils folder and you should add the my_company_utils/.* line 
+      to .airflowignore, so that the whole folder is ignored by scheduler when it looks for DAGs.
+
+Dynamic DAGs with external configuration from a structured data file
+   If you need to use a more complex meta-data to prepare your DAG structure 
+   and you would prefer to keep the data in a structured non-python format, 
+   you should export the data to the DAG folder in a file and push it to the DAG folder, 
+   rather than try to pull the data by the DAG’s top-level code - for the reasons explained in the parent Top level Python code.
+
+   The meta-data should be exported and stored together with the DAGs in a convenient file
+   format (JSON, YAML) in DAG folder. Ideally, the meta-data should be published 
+   in the same package/folder as the module of the DAG file you load it from, 
+   because then you can find location of the meta-data file in your DAG easily. 
+   Example
+      my_dir = os.path.dirname(os.path.abspath(__file__))
+      configuration_file_path = os.path.join(my_dir, "config.yaml")
+      
+      with open(configuration_file_path) as yaml_file:
+         configuration = yaml.safe_load(yaml_file) trustit

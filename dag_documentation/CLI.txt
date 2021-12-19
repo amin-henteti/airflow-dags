@@ -1,0 +1,14 @@
+# For global activation of all argcomplete enabled python applications run:
+sudo activate-global-python-argcomplete
+# This will print the rendered DAG structure (similar to Graph) to the screen in DOT format.
+# You’ll need to have Graphviz installed.
+airflow dags show example_complex
+# to save in a file
+airflow dags show example_complex --save example_complex.png 
+
+--output flag allow users to change the formatting of command’s output:
+   table - renders the information as a plain text table
+   simple- renders the information as simple table which can be parsed by standard linux utilities
+   json -  renders the information in form of json string
+   yaml -  render the information in form of valid yaml
+

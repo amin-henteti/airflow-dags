@@ -1,0 +1,69 @@
+TaskFlow 
+   It takes care of moving inputs and outputs between your Tasks using XComs for you, 
+   as well as automatically calculating dependencies - 
+   when you call a TaskFlow function in your DAG file, rather than executing it, 
+   you will get an object representing the XCom for the result (an XComArg), 
+   that you can then use as inputs to downstream tasks or operators. 
+   Example
+      @task
+      def hello_name(name: str):
+         print(f'Hello {name}!')
+
+      hello_name('Airflow users')
+
+Task Instances
+   Much in the same way that a DAG is instantiated into a DAG Run each time it runs, 
+   the tasks under a DAG are instantiated into Task Instances.
+
+   An instance of a Task is a specific run of that task for a given DAG 
+   (and thus for a given data interval). 
+   They are also the representation of a Task that has state, 
+   representing what stage of the lifecycle it is in.
+   Ideally, a task should flow from none, to scheduled, queued, running, finally success.
+   
+   The possible states for a Task Instance are:
+
+      none: The Task has not yet been queued for execution 
+      (its dependencies are not yet met)
+
+      scheduled: scheduler has determined the Task’s dependencies are met and it should run
+
+      queued: The task has been assigned to an Executor and is awaiting a worker
+
+      running: The task is running on a worker (or on a local/synchronous executor)
+
+      success: The task finished running without errors
+
+      shutdown: The task was externally requested to shut down when it was running
+
+      restarting: The task was externally requested to restart when it was running
+
+      failed: The task had an error during execution and failed to run
+
+      skipped: The task was skipped due to branching, LatestOnly, or similar.
+
+      upstream_failed: An upstream task failed and the Trigger Rule says we needed it
+
+      up_for_retry: The task failed, but has retry attempts left and will be rescheduled.
+
+      up_for_reschedule: The task is a Sensor that is in reschedule mode
+
+      sensing: The task is a Smart Sensor
+
+      deferred: The task has been deferred to a trigger
+
+      removed: The task has vanished from the DAG since the run started
+      
+Relationship terminology
+   a task can have an upstream or downstrem tasks 
+   When a DAG runs, it will create instances for each of these tasks that are upstream/downstream 
+   of each other, but which all have the same data interval.
+
+   There may also be instances of the same task, but for different data intervals 
+   - from other runs of the same DAG. We call these previous and next
+
+Timeouts
+   This is used when you want to set a time limit for the execution of a particular task
+   just by passing the argument execution_timeout whith the timedelta value
+   if reached the task is time out and an AirflowTaskTimeout is raised
+   

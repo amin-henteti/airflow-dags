@@ -1,0 +1,20 @@
+Add custom alert messages on the dashboard
+   Extra alert messages can be shown on the UI dashboard. 
+   This can be useful for warning about setup issues or announcing changes to end users. 
+   Example (how to add a simple alert message)
+      1) Create airflow_local_settings.py file and put in on $PYTHONPATH 
+      or to $AIRFLOW_HOME/config folder. 
+      (Airflow adds $AIRFLOW_HOME/config on PYTHONPATH when Airflow is initialized)
+      2) Add the following contents to airflow_local_settings.py file.
+      from airflow.www.utils import UIAlert
+      DASHBOARD_UIALERTS = [
+         UIAlert("Welcome to Airflow"),
+         # other message to indicate the permissions of user is not enough for example to execute the following dag
+         UIAlert("Airflow update happening next week", category="warning", roles=["User"]),
+         # we can also use HTML anchor like a tage in the message
+         UIAlert( 'Visit <a href="https://airflow.apache.org">airflow</a>', html=True),
+         # we can use formatting 
+         UIAlert(Markup("Welcome <em>%s</em>") % ("John & Jane Doe",)),
+      ]
+      3) Restart Airflow and you should see a message (like in a django website) 
+      that indicate the message passed in

@@ -1,0 +1,72 @@
+Scheduler
+   The scheduler won’t trigger your tasks until the period it covers has ended 
+   Example
+      A job with schedule_interval set as @daily runs after the day has ended. 
+      This technique makes sure that whatever data is required for that period 
+      is fully available before the DAG is executed. 
+      In the UI, it appears as if Airflow is running your tasks a day late
+   Triggering DAG with Future Date, set allow_trigger_in_future = True in scheduler section in airflow.cfg
+   Airflow supports running more than one scheduler concurrently 
+   To maintain performance and throughput there is one part of the scheduling loop 
+   that does a number of calculations in memory (because having to round-trip to the DB for
+   each TaskInstance would be too slow) 
+   
+Pools
+   Some systems can get overwhelmed when too many processes hit them at the same time.
+   Airflow pools can be used to limit the execution parallelism on arbitrary sets of tasks.
+   The list of pools is managed in the UI (Menu -> Admin -> Pools) by giving the pools 
+   a name and assigning it a number of worker slots.
+   Tasks can then be associated with one of the existing pools by using the pool parameter
+   Example
+      task = BashOperator("task_pool", execution_timeout = timedelta(hours=3), pool="ep_aggregate_message"
+      bash_command="ipconfig", dag=dag)
+   If tasks are not given a pool, they are assigned to a default pool default_pool. 
+   default_pool initialized with 128 slots and can be modified by the UI/CLI (cannot removed).
+
+   Tasks will be scheduled as usual while the slots fill up. 
+   The number of slots occupied by a task can be configured by pool_slots. 
+   Once capacity is reached, runnable tasks get queued and their state will show in the UI.
+   
+Priority Weights
+   Can be used in conjuction with pools
+   Each task has a true priority_weight that is calculated based on its weight_rule
+   which defines weighting method used for the effective total priority weight of the task.
+   3 types of weight rule:
+      1) downstream : effective weight of the task is the aggregate sum of all downstream descendants. As a result, upstream tasks will have higher weight and will be scheduled 
+      more aggressively when using positive weight values.
+      2) upstream : The effective weight is the aggregate sum of all upstream ancestors.
+      This is the opposite where downstream tasks have higher weight and will be scheduled
+      more aggressively when using positive weight values. 
+      3) absolute: The effective weight is the exact priority_weight specified without
+      additional weighting. You may want to do this when you know exactly what priority weight 
+      each task should have. 
+      there is bonus effect of speeding up the task creation process as for very large DAGs
+
+Cluster Policies
+   Let you do tha check DAGs or Tasks on a cluster-wide level. They have three main purposes:
+      1) Checking that DAGs/Tasks meet a certain standard
+      2) Setting default arguments on DAGs/Tasks
+      3) Performing custom routing logic
+   There are three types of cluster policy:
+      1) dag_policy: Takes a DAG parameter called dag. Runs at load time.
+      2) task_policy: Takes a BaseOperator parameter called task. Runs at load time.
+      3) task_instance_mutation_hook: Takes a TaskInstance parameter called task_instance. 
+      Called right before task execution.
+   Example
+      def dag_policy(dag: DAG):
+         """Ensure that DAG has at least one tag"""
+         if not dag.tags:
+            raise AirflowClusterPolicyViolation(
+               f"DAG {dag.dag_id} has no tags. At least one tag required. File path: 
+               {dag.fileloc}"
+            )
+      # protect against common errors, rather than as technical security controls
+      def task_must_have_owners(task: BaseOperator):
+         if not task.owner or task.owner.lower() == conf.get('operators', 'default_owner'):
+            raise AirflowClusterPolicyViolation(
+               f'''Task must have non-None non-default owner. Current value: {task.owner}'''
+            )
+
+
+   
+   

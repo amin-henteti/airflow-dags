@@ -1,0 +1,60 @@
+Dag Run
+   a DAG run will only be scheduled one interval after start_date.
+   a DAG with a start_date, (possibly an end_date), and a schedule_interval aguments 
+   in the dag definition defines a series of intervals 
+   which the scheduler turns into individual DAG Runs and executes.
+   
+External Triggers
+   Note that DAG Runs can also be created manually through the CLI. Just run the command -
+   airflow dags trigger --exec-date logical_date run_id
+   
+Catchup 
+   The scheduler, by default, will kick off a DAG Run for any data interval 
+   that has not been run since the last data interval (or has been cleared). 
+
+
+Backfill
+   It is the process when you may want to run the dag for a specified historical period 
+   Example
+      A data filling DAG is created with start_date 2019-11-21, 
+      but another user requires the output data from a month ago i.e., 2019-10-21. 
+      The backfill command will re-run all the instances of the dag_id 
+      for all the intervals within the start date and end date.
+
+Re-run Tasks
+   Some of the tasks can fail during the scheduled run. Once you have fixed the errors
+   after going through logs, you can rerun the tasks by clearing them for the scheduled date.
+   Clearing a task instance doesn’t delete the task instance record. 
+   Instead, it updates max_tries to 0 and sets the current task instance state to None, 
+   which causes the task to re-run.
+   You can click on the failed task in the Graph view and then click on Clear. 
+   The executor will re-run it. 
+   Or using CLI 
+   Example
+      # clears all instances of the tasks matching the regex
+      airflow tasks clear dag_id \
+         --task-regex task_regex \
+         --start-date START_DATE \
+         --end-date END_DATE
+   
+
+Passing Parameters when triggering dags
+   When triggering a DAG from the CLI, the REST API or the UI, it is possible to pass configuration for a DAG Run as a JSON blob.
+   Example 
+      # to parameterized DAG
+      from airflow import DAG
+      from airflow.operators.bash import BashOperator
+      from airflow.utils.dates import days_ago
+
+      dag = DAG("example_parameterized_dag", schedule_interval=None, start_date=days_ago(2))
+
+      parameterized_task = BashOperator(
+         task_id="parameterized_task",
+         bash_command="echo value: {{ dag_run.conf['conf1'] }}", 
+         # parameters from dag_run.conf can only be used in a template field of an operator.
+         dag=dag,
+      )
+      # works in UI : {'conf1' : 'value1'}
+      # Using CLI :  airflow dags trigger --conf '{"conf1": "value1"}' example_parameterized_dag
+
+

@@ -1,0 +1,59 @@
+Operators
+   An Operator is conceptually a template for a predefined Task, 
+   that you can just define declaratively inside your DAG
+   when we talk about a Task, we mean the generic “unit of execution” of a DAG; 
+   when we talk about an Operator, we mean a reusable, pre-made Task template 
+   whose logic is all done for you and that just needs some arguments
+   Airflow has a very extensible set of operators in the core and 
+   you can find it in providers packages in airflow
+   Example
+      - PythonOp
+      - BranchOp
+      - EmailOp
+      - BashOp
+      - SimpleHttpOp
+      - MySqlOp - PostgresOp - MsSqlOp
+      - DockerOp
+      
+Jinja Templating
+   Airflow leverages the power of Jinja Templating and this can be a powerful tool 
+   to use in combination with macros which are a way to expose objects to your templates 
+   and live under the macros namespace in your templates.
+   Deep nested fields can also be substituted, as long as all intermediate fields are marked as template fields:
+
+   Example
+      class MyDataTransformer:
+         template_fields = ["reader"]
+
+         def __init__(self, my_reader):
+            self.reader = my_reader
+         # [additional code here...]
+
+      class MyDataReader:
+         template_fields = ["path"]
+
+         def __init__(self, my_path):
+            self.path = my_path
+         # [additional code here...]
+
+      t = PythonOperator(
+         task_id="transform_data",
+         python_callable=transform_data,
+         op_args=[MyDataTransformer(MyDataReader("/tmp/{{ ds }}/my_file"))],
+         dag=dag,
+      )
+   All template_fields are rendered as string
+   Note when a python operator's callable return a variable 
+   This variable will be automatically pushed to Xcom just indicate name of task in xpull
+   Example
+      # a task pushes a dictionary {"1001": 301.27, "1002": 433.21) to XCom table. 
+      # Now, when the following task is run, order_data argument is passed a STRING, 
+      transform = PythonOperator(
+          task_id="transform",
+          op_kwargs={"order_data": "{{ti.xcom_pull('extract')}}"},
+          python_callable=transform,
+      )   
+      # if we want to use native object i.e., literal dictionary we must pass an argument 
+      to the dag declaration render_template_object_as_native_obj and set to true
+   
+

@@ -1,0 +1,26 @@
+Email Configuration
+   You can configure the email that is being sent in your airflow.cfg 
+   by setting a subject_template and/or a html_content_template in the [email] section.
+   you can create a connection called smtp_default of Email type, 
+   or choose a custom connection name and set the email_conn_id with it’s name in the 
+   configuration & store SMTP username-password in it
+   
+   Example
+      [email]
+      email_backend = airflow.utils.email.send_email_smtp
+      subject_template = /path/to/my_subject_template_file
+      html_content_template = /path/to/my_html_content_template_file
+Send email using SendGrid
+   Airflow can be configured to send e-mail using SendGrid.
+   The steps to enable it are :
+      1) Include sendgrid provider as part of your Airflow installation, e.g.,
+         pip install 'apache-airflow-providers-sendgrid' --constraint ... or 'apache-airflow[sendgrid]' --constraint ...
+      2) Update email_backend property in [email] section of the airflow.cfg file
+         [email]
+         email_backend = airflow.providers.sendgrid.utils.emailer.send_email
+         email_conn_id = sendgrid_default
+      3) Create a connection called sendgrid_default, or choose a custom connection name 
+      and set it in email_conn_id of ‘Email’ type. 
+      Only login and password are used from the connection
+      
+

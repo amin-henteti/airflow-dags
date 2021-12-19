@@ -1,0 +1,63 @@
+Variables
+   The most used variable is "ds": (str) anchor date (DAG run’s logical date) in YYYY-MM-DD format
+   Note that you can access the object’s attributes and methods with simple dot notation. 
+      Example
+         {{ task.owner }}, {{ task.task_id }}, {{ ti.hostname }}, … 
+         # Refer to the models documentation for information on the objects’ attributes, methods.
+   The var template variable allows you to access variables defined in Airflow’s UI.
+   You can access them as either plain-text or JSON. 
+   If you use JSON, you are also able to walk nested structures, such as dictionaries 
+   Example
+      {{ var.json.my_dict_var.key1 }}.
+   Airflow Connections data can be accessed via the conn template variable.
+   Example
+      # you could use expressions in your templates like 
+      {{ conn.my_conn_id.login }}, {{ conn.my_conn_id.password }}, etc. 
+      # Just like with var it’s possible to fetch a connection by string 
+      {{ conn.get('my_conn_id_'+index).host }} ) 
+      # or provide defaults 
+      {{ conn.get('my_conn_id', default={"host": "host1", "login": "user1"}).host }}
+      
+Filters
+   Airflow defines the some Jinja filters that can be used to format values.
+   Example
+      using {{ execution_date | ds }} will output execution_date in the YYYY-MM-DD format.
+
+Macros
+   They are a way to expose objects to your templates 
+   and live under the macros namespace in your templates.
+   A few commonly used libraries and methods are made available.
+   Example 
+      # Variable           Description
+      macros.datetime      The standard lib’s datetime.datetime
+      macros.timedelta     The standard lib’s datetime.timedelta
+      macros.dateutil      A reference to the dateutil package
+      macros.time          The standard lib’s datetime.time
+      macros.uuid          The standard lib’s uuid
+      macros.random        The standard lib’s randomTasks
+   we can use also a predefined macros methods inside templates
+   Example 
+      airflow.macros.datetime_diff_for_humans # Return a human-readable/approximate difference between two datetimes, or one and now.
+      airflow.macros.ds_add(ds, days) # Add or subtract days from a YYYY-MM-DD
+      airflow.macros.ds_format(ds, input_format, output_format) # return in the output format
+      # ds_format('2015-01-01', "%Y-%m-%d", "%m-%d-%y") => '01-01-15'
+      airflow.macros.random() → x in the interval [0, 1).
+      
+Tasks
+   It is a running instance of an operator. 
+   During the instantiation, you can define specific parameters associated with the operator 
+   and the parameterized task becomes a node in a DAG.
+
+Operators
+   There are 3 main types of operators:
+      Operators that performs an action, or tell another system to perform an action
+
+      Transfer operators move data from one system to another
+
+      Sensors will keep running until a certain criterion is met
+      
+Executors
+   Executors are the mechanism by which task instances get run. 
+   All executors are derived from BaseExecutor.
+
+

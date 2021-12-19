@@ -1,0 +1,38 @@
+Sensors
+   They are a special type of Operator that are designed to do exactly one thing 
+   - wait for something to occur. It can be 
+      1) time-based, or 
+      2) waiting for a file, or 
+      3) an external event, 
+   but all they do is wait until something happens, and then succeed 
+   so their downstream tasks can run.
+   A Sensor that is checking every second should be in poke mode, 
+   while checking every minute sensor should be in reschedule mode.
+   There's another mode of Sensors caleed smart sensor and it's used for waiting for longer time
+   Smart sensor is service (run by builtin DAG) which reduces Airflow’s infrastructure cost 
+   by consolidating multiple instances of small, light-weight Sensors into a single process.
+   
+Deferrable operator 
+   It is one that is written with the ability to suspend itself and free up the worker 
+   when it knows it has to wait, and hand off the job of resuming it to a Trigger. 
+   As a result, while it is suspended (deferred), it is not taking up a worker slot 
+   and your cluster will have a lot less resources wasted on idle Operators or Sensors.
+
+Triggers 
+   They are small, asynchronous pieces of Python code designed to be run all together
+   in a single Python process; because they are asynchronous, they are able to all co-exist
+   As an overview of how this process works:
+      1) A task instance (running operator) gets to a point where it has to wait, 
+      and defers itself with a trigger tied to the event that should resume it. 
+      This frees up the worker to run something else.
+
+      2) The new Trigger instance is registered inside Airflow, 
+      and picked up by a triggerer process
+
+      3) The trigger is run until it fires, at which point its source task is re-scheduled
+
+      4) The scheduler queues the task to resume on a worker node
+
+
+
+

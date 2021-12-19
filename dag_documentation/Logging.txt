@@ -1,0 +1,127 @@
+Logging Tasks 
+   Airflow writes logs for tasks such that you can see logs for each task separately in UI.
+   The Core Airflow implements writing and serving logs locally in  AIRFLOW_HOME directory 
+   specified by base_log_folder in airflow.cfg.
+
+   The following convention is followed while naming logs: 
+   {dag_id}/{task_id}/{logical_date}/{try_number}.log
+
+   However, when remote logginfg is enabled you can also write logs to remote services 
+   - via community providers, 
+   Note that logs are only sent to remote storage once a task is complete (including failure); 
+   So, remote logs for running tasks are unavailable (but local logs are available).
+
+Troubleshooting
+   If you want to check which task handler is currently set, you can use airflow info cmd
+   or airflow config list to check that the logging configuration options have valid values.
+
+External Links
+   When using remote logging, users can configure Airflow to show a link to an external UI
+   within the Airflow Web UI. Clicking the link redirects a user to the external UI.
+
+Serving logs from workers
+   The server is running on the port specified by worker_log_server_port option 
+   in [logging] section. By default, it is 8793. 
+   Communication between the webserver and the worker is signed with the key specified by 
+   secret_key option in [webserver] section. 
+   
+Callbacks
+   Act upon changes in state of a given task, or across all tasks in a given DAG. 
+   Callback functions are only invoked when the task state changes due to execution by worker.
+   Example
+      alert when certain tasks have failed, 
+      or have the last task in your DAG invoke a callback when it succeeds.
+   Callback Types
+   There are four types of task events that can trigger a callback:
+      1) on_success_callback : Invoked when the task succeeds
+      2) on_failure_callback : Invoked when the task fails
+      3) sla_miss_callback   : Invoked when a   task misses its defined SLA
+      4) on_retry_callback   : Invoked when the task is up for ret
+      
+   Example
+      # In this example failures in any task call the task_failure_alert function, 
+      # and success in the last task calls the dag_success_alert function
+      from airflow import DAG
+      from airflow.operators.dummy import DummyOperator
+      
+      def task_failure_alert(context):
+         print(f"Task has failed, task_instance_key_str: {context['task_instance_key_str']}")
+      def dag_success_alert(context):
+         print(f"DAG has succeeded, run_id: {context['run_id']}")
+      
+      with DAG(
+         dag_id="example_callback", start_date=datetime(2021, 1, 1), catchup=False,
+         on_success_callback=None, on_failure_callback=task_failure_alert, tags=["example"],
+      ) as dag:
+         task1 = DummyOperator(task_id="task1")
+         task2 = DummyOperator(task_id="task2")
+         task3 = DummyOperator(task_id="task3", on_success_callback=dag_success_alert)
+         task1 >> task2 >> task3
+
+Check Airflow health
+   Airflow has two methods to check the health of components - HTTP checks and CLI checks. 
+   All available checks are accessible through the CLI, but some are accssible through web
+   
+   For a Docker Compose environment, see the docker-compose.yaml file available 
+   in the Running Airflow in Docker
+   To check the health status of your Airflow instance, you can access the endpoint /health
+
+CLI Check for Database
+   To verify that the database is working correctly, you can use the airflow db check command. 
+   On failure, the command will exit with a non-zero error code.
+
+Error Tracking
+   Airflow can be set up to send errors to Sentry.
+   Setup : First you must install sentry requirement: pip install 'apache-airflow[sentry]'
+   Then enable the integration by set sentry_on option in [sentry] section to "True".
+   Add your SENTRY_DSN to airflow.cfg in [sentry] section. 
+   Its template resembles the following: '{PROTOCOL}://{PUBLIC_KEY}@{HOST}/{PROJECT_ID}'
+   
+Tracking User Activity
+   You can configure Airflow to route anonymous data to Google Analytics, Segment, Metarouter.
+   Edit airflow.cfg and set the webserver block to have an analytics_tool and analytics_id:
+   Example
+      [webserver]
+      # Send anonymous user activity to Google Analytics, Segment, or Metarouter
+      analytics_tool = google_analytics # valid options: google_analytics, segment, metarouter
+      analytics_id = XXXXXXXXXXX
+   
+Lineage
+   Airflow tracks data by means of inlets and outlets of the tasks. 
+   Example
+      from airflow.operators.bash import BashOperator
+      from airflow.operators.dummy import DummyOperator
+      from airflow.lineage import AUTO
+      from airflow.lineage.entities import File
+      from airflow.models import DAG
+      from airflow.utils.dates import days_ago
+      from datetime import timedelta
+
+      FILE_CATEGORIES = ["CAT1", "CAT2", "CAT3"]
+
+      args = {"owner": "airflow", "start_date": days_ago(2)}
+
+      dag = DAG(
+         dag_id="example_lineage",
+         default_args=args,
+         schedule_interval="0 0 * * *",
+         dagrun_timeout=timedelta(minutes=60),
+      )
+
+      f_final = File(url="/tmp/final")
+      run_this_last = DummyOperator(
+         task_id="run_this_last", dag=dag, inlets=AUTO, outlets=f_final
+      )
+
+      f_in = File(url="/tmp/whole_directory/")
+      outlets = []
+      for file in FILE_CATEGORIES:
+         f_out = File(url="/tmp/{}/{{{{ data_interval_start }}}}".format(file))
+         outlets.append(f_out)
+
+      run_this = BashOperator(
+         task_id="run_me_first", bash_command="echo 1", dag=dag, inlets=f_in, outlets=outlets
+      )
+      run_this.set_downstream(run_this_last)
+
+
