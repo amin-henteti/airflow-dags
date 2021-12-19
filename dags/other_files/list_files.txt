@@ -1,0 +1,15 @@
+total 43
+-rwxrwxrwx    1 docker   staff            0 Nov 25 08:54 list_files.txt
+-rwxrwxrwx    1 docker   staff          376 Nov 25 08:42 test.py
+drwxrwxrwx    1 docker   staff         4096 Nov 25 08:42 .
+-rwxrwxrwx    1 docker   staff          135 Nov 25 08:07 cpdeamon.sh
+dr-xr-xr-x    1 docker   staff         4096 Nov 24 23:44 ..
+drwxrwxrwx    1 docker   staff         4096 Nov 24 10:37 __pycache__
+-rwxrwxrwx    1 docker   staff           45 Nov 24 09:17 cron.txt
+-rwxrwxrwx    1 docker   staff         4087 Nov 23 23:54 help
+-rwxrwxrwx    1 docker   staff          268 Nov 23 23:35 resolve_postgres.py
+-rwxrwxrwx    1 docker   staff          244 Nov 23 21:53 key.json
+-rwxrwxrwx    1 docker   staff         9438 Nov 23 16:19 docker_run_help.txt
+-rwxrwxrwx    1 docker   staff          210 Nov 23 15:09 nnn.py
+-rwxrwxrwx    1 docker   staff          951 Feb 18  2021 trigger_rules.py
+-rwxrwxrwx    1 docker   staff         1755 Feb 18  2021 hooks.py

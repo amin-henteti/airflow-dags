@@ -1,0 +1,27 @@
+connection
+psql -U airflow
+mysql --password > root
+
+show databases 
+psql /db
+mysql show databases
+
+use "db_name";
+
+show tables 
+psql /dt
+mysql show tables
+
+mysql commands 
+SHOW DATABASE CUST%; # Show all the databases that start with the letters CUST
+mysql –u username –p password –e “show databases;” # execute commands
+sudo mysql --user=root mysql -p # Access MySQL as Root
+SELECT user FROM mysql.user;    # Show All MySQL Users who have access to the server:
+SELECT User, Host, authentication_string FROM mysql.user; # Show MySQL User Information
+SELECT user(); # Show Current MySQL User can use also current_user();
+
+# Show Logged In MySQL Users
+# check the users who are currently logged in to the MySQL database server. 
+# This function help in monitoring your MySQL server for unauthorized usage.
+
+SELECT user, host,db, command FROM information_schema.processlist; # show the list of currently logged in MySQL users:
