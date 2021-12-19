@@ -1,4 +1,4 @@
-version: '3.7'
+version: '3'
 services:
     postgres:
         image: postgres:9.6
@@ -6,31 +6,51 @@ services:
             - POSTGRES_USER=airflow
             - POSTGRES_PASSWORD=airflow
             - POSTGRES_DB=airflow
-        logging:
-            options:
-                max-size: 10m
-                max-file: "3"
+        healthcheck:
+            test: ["CMD", "pg_isready", "-U", "airflow"]
+            interval: 5s
+            retries: 5
+        restart: always
+    mysql:
+        image: mysql:5.7
+        environment:
+            - MYSQL_ROOT_PASSWORD=root
+        volumes:
+            # AFshare is the name of the shared folder
+            - ./store_files:/store_files_mysql/
+            - ./mysql.cnf:/etc/mysql/mysql.cnf
+        restart: always
 
     webserver:
-        image: puckel/docker-airflow:1.10.9
+        image: apache/airflow:2.2.2 # puckel/docker-airflow:1.10.4
         restart: always
         depends_on:
             - postgres
+            - mysql
         environment:
+            - INSTALL_MYSQL=y
             - LOAD_EX=n
             - EXECUTOR=Local
-        logging:
-            options:
-                max-size: 10m
-                max-file: "3"
+            #M - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+            - AIRFLOW__SMTP__SMTP_HOST=smtp.gmail.com
+            - AIRFLOW__SMTP__SMTP_USER=maynouhenteti@yahoo.com
+            - AIRFLOW__SMTP__SMTP_PASSWORD=fxmsgdhjrykahwah
+            - AIRFLOW__SMTP__SMTP_PORT=465
+            - AIRFLOW__SMTP__SMTP_MAIL_FROM=Airflow-Amin
         volumes:
-            - ./dags:/usr/local/airflow/dags
-            # - ./plugins:/usr/local/airflow/plugins
+            - ./dags:/opt/airflow/dags
+            - ./scripts:/opt/airflow/scripts
+            - ./plugins:/opt/airflow/plugins
+            # uncomment this can cause problems
+            # - ./logs:/opt/airflow/logs
+            - ./store_files:/opt/airflow/store_files_airflow
+            - ./sql_files:/opt/airflow/sql_files
         ports:
             - "8080:8080"
         command: webserver
         healthcheck:
-            test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+            test: ["CMD-SHELL", "[ -f /opt/airflow/airflow-webserver.pid ]"]
             interval: 30s
             timeout: 30s
             retries: 3
+            
